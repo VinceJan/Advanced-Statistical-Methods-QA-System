@@ -1,0 +1,13 @@
+.env
+.agents/
+.codex/
+.venv/
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+frontend/node_modules/
+frontend/dist/
+backend/.pytest_cache/

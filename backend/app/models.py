@@ -1,0 +1,139 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(20), default="student", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    sessions: Mapped[list["SessionToken"]] = relationship(back_populates="user")
+    histories: Mapped[list["QuestionHistory"]] = relationship(back_populates="user")
+    conversations: Mapped[list["ChatConversation"]] = relationship(back_populates="user")
+
+
+class SessionToken(Base):
+    __tablename__ = "session_tokens"
+
+    token: Mapped[str] = mapped_column(String(160), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class Concept(Base):
+    __tablename__ = "concepts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name_cn: Mapped[str] = mapped_column(String(120), index=True)
+    name_en: Mapped[str] = mapped_column(String(160), index=True)
+    aliases_json: Mapped[str] = mapped_column(Text, default="[]")
+    chapter: Mapped[str] = mapped_column(String(120), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+
+
+class GraphEdge(Base):
+    __tablename__ = "graph_edges"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), index=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), index=True)
+    relation_type: Mapped[str] = mapped_column(String(64), index=True)
+    evidence: Mapped[str] = mapped_column(Text, default="")
+
+
+class QAPair(Base):
+    __tablename__ = "qa_pairs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    type: Mapped[str] = mapped_column(String(40), index=True)
+    concept_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+    source_refs_json: Mapped[str] = mapped_column(Text, default="[]")
+    quality_status: Mapped[str] = mapped_column(String(40), default="已校对")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TextChunk(Base):
+    __tablename__ = "text_chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    chunk_id: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    text: Mapped[str] = mapped_column(Text)
+    chapter: Mapped[str] = mapped_column(String(120), default="")
+    section: Mapped[str] = mapped_column(String(160), default="")
+    pdf_page: Mapped[int] = mapped_column(Integer, index=True)
+    source_file: Mapped[str] = mapped_column(String(255), default="")
+    embedding_model: Mapped[str] = mapped_column(String(120), default="local-hybrid")
+
+
+class ChatConversation(Base):
+    __tablename__ = "chat_conversations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160), default="新会话")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    user: Mapped[User] = relationship(back_populates="conversations")
+    messages: Mapped[list["ChatMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("chat_conversations.id"), index=True)
+    role: Mapped[str] = mapped_column(String(20), index=True)
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40), default="")
+    confidence: Mapped[str] = mapped_column(String(32), default="")
+    retrieval_confidence: Mapped[str] = mapped_column(String(32), default="")
+    answer_mode: Mapped[str] = mapped_column(String(80), default="")
+    sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    related_questions_json: Mapped[str] = mapped_column(Text, default="[]")
+    matched_concepts_json: Mapped[str] = mapped_column(Text, default="[]")
+    graph_json: Mapped[str] = mapped_column(Text, default='{"nodes":[],"edges":[]}')
+    performance_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    conversation: Mapped[ChatConversation] = relationship(back_populates="messages")
+
+
+class QuestionHistory(Base):
+    __tablename__ = "question_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    conversation_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    message_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    answer_summary: Mapped[str] = mapped_column(Text)
+    sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User] = relationship(back_populates="histories")
+
+
+class SystemConfig(Base):
+    __tablename__ = "system_config"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
