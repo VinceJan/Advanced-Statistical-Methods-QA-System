@@ -60,6 +60,7 @@
 - `.venv/`、`frontend/node_modules/`、`__pycache__/`、`.pytest_cache/` 均不属于源码。
 - `docs/qa-screenshots/` 是验收截图，可以作为课程项目证据保留。
 - Docker 入口包括 `Dockerfile.backend`、`frontend/Dockerfile`、`docker-compose.yml`、`docker-compose.server.yml`、`deploy/Caddyfile`。
+- `deliverables/` 保存课程答辩 PPT、汇报 PPT 和演讲稿；如内容大改，运行 `scripts/make_ppt_decks.py` 重新生成。
 
 ## 验证要求
 

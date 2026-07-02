@@ -39,6 +39,7 @@
 │   ├── 完成度评估.md
 │   ├── 验收记录.md
 │   └── 实验报告.md
+├── deliverables/             # 答辩 PPT 与演讲稿
 ├── scripts/                  # Windows PowerShell 启动与验证脚本
 ├── deploy/Caddyfile          # Docker Compose 自带 Caddy 入口
 ├── Dockerfile.backend        # 后端镜像
@@ -197,6 +198,7 @@ https://aistudyassistant.bluesclawd.dev
 - `docs/完成度评估.md`：当前完成度评分和剩余优化。
 - `docs/验收记录.md`：验证命令、截图和运行结果。
 - `docs/实验报告.md`：课程报告正文。
+- `deliverables/`：详尽答辩版 PPT、适中汇报版 PPT 和对应演讲稿。
 
 ## 安全说明
 
