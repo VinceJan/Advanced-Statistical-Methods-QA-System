@@ -599,44 +599,6 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
             </div>
           )}
 
-          {/* 当前轮次详情：来源、图谱、推荐问题 */}
-          {activeAssistant && (
-            <div className={`answerShell ${!canShowEvidence ? "single" : ""}`}>
-              <section className="answerPanel">
-                <div className="panelHeader">
-                  <h3>当前轮次详情</h3>
-                  <StatusBadge result={activeAssistant} />
-                </div>
-                <MarkdownBlock content={activeAssistant.content} />
-                {activeAssistant.status === "llm_error" && (
-                  <p className="warning">外部 LLM 调用失败，当前展示本地证据降级回答。</p>
-                )}
-              </section>
-              {canShowEvidence && (
-                <section className="sidePanel">
-                  <h3>来源</h3>
-                  <div className="sourceList">
-                    {activeAssistant.sources.map((source, index) => (
-                      <SourceCard key={source.chunk_id} source={source} token={token} index={index} />
-                    ))}
-                  </div>
-                  {activeAssistant.related_questions.length > 0 && <h3>相关问题</h3>}
-                  <div className="stackButtons">
-                    {activeAssistant.related_questions.map((item) => (
-                      <button key={item} onClick={() => ask(item)}>{item}</button>
-                    ))}
-                  </div>
-                </section>
-              )}
-              {canShowEvidence && activeAssistant.graph.nodes.length > 0 && (
-                <section className="graphPanel widePanel">
-                  <h3>关联知识图谱子图</h3>
-                  <GraphCanvas graph={activeAssistant.graph} />
-                </section>
-              )}
-            </div>
-          )}
-
           {/* 输入框（ChatGPT 风格固定在底部） */}
           <section className="askBox elevated">
             <textarea
