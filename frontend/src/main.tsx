@@ -21,6 +21,7 @@ import {
   LogIn,
   LogOut,
   MessageSquareText,
+  NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -169,7 +170,7 @@ function App() {
           <button className={tab === "ask" ? "active" : ""} onClick={() => setTab("ask")}><MessageSquareText size={18} />问答工作台</button>
           {role === "admin" && <button className={tab === "manage" ? "active" : ""} onClick={() => setTab("manage")}><Database size={18} />问答对管理</button>}
           <button className={tab === "graph" ? "active" : ""} onClick={() => setTab("graph")}><GitBranch size={18} />知识图谱</button>
-          <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}><Clock3 size={18} />学习历史</button>
+          <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}><NotebookPen size={18} />我的笔记</button>
           {role === "admin" && <button className={tab === "admin" ? "active" : ""} onClick={() => setTab("admin")}><ShieldCheck size={18} />管理后台</button>}
         </nav>
         <div className="sidebarStats">
@@ -258,6 +259,9 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("qa_ask_sidebar_collapsed") === "1";
   });
+  const [sidebarQuery, setSidebarQuery] = useState("");
+  const [favorites, setFavorites] = useState<HistoryItem[]>([]);
+  const [showFavorites, setShowFavorites] = useState(false);
 
   function toggleSidebar() {
     setSidebarCollapsed((prev) => {
@@ -273,6 +277,14 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
     if (nextId) await openConversation(nextId, false);
   }
 
+  async function loadFavorites() {
+    try {
+      setFavorites(await api.favorites(token));
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "加载收藏失败");
+    }
+  }
+
   async function openConversation(id: number, refreshList = true) {
     try {
       const detail = await api.conversation(token, id);
@@ -281,8 +293,27 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
       const lastAssistant = [...detail.messages].reverse().find((item) => item.role === "assistant");
       setActiveMessageId(lastAssistant?.id ?? null);
       if (refreshList) setConversations(await api.conversations(token));
+      setShowFavorites(false);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "打开会话失败");
+    }
+  }
+
+  async function openFavorite(item: HistoryItem) {
+    if (item.conversation_id == null) {
+      setToast("该收藏没有关联的会话，无法打开");
+      return;
+    }
+    try {
+      const detail = await api.conversation(token, item.conversation_id);
+      setConversationId(detail.id);
+      setMessages(detail.messages);
+      const target = detail.messages.find((m) => m.id === item.message_id) ||
+        [...detail.messages].reverse().find((m) => m.role === "assistant");
+      setActiveMessageId(target?.id ?? null);
+      setShowFavorites(false);
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "打开收藏失败");
     }
   }
 
@@ -297,6 +328,13 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
     } catch (err) {
       setToast(err instanceof Error ? err.message : "删除会话失败");
     }
+  }
+
+  async function newConversation() {
+    setConversationId(null);
+    setMessages([]);
+    setActiveMessageId(null);
+    setQuestion("");
   }
 
   async function ask(q = question) {
@@ -317,6 +355,7 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
 
   useEffect(() => {
     loadConversations().catch(() => setConversations([]));
+    loadFavorites().catch(() => setFavorites([]));
   }, []);
 
   const assistantMessages = messages.filter((item) => item.role === "assistant");
@@ -324,6 +363,13 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
     assistantMessages.find((item) => item.id === activeMessageId) ||
     (assistantMessages.length ? assistantMessages[assistantMessages.length - 1] : null);
   const canShowEvidence = activeAssistant?.status === "answered" || activeAssistant?.status === "llm_error";
+
+  // 会话列表按时间分组（今天 / 昨天 / 本周 / 更早）
+  const filteredConversations = conversations.filter((c) => {
+    if (!sidebarQuery.trim()) return true;
+    return c.title.toLowerCase().includes(sidebarQuery.toLowerCase());
+  });
+  const grouped = groupByDate(filteredConversations);
 
   return (
     <div className="workspace">
@@ -333,81 +379,229 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
           <p>支持连续追问；每轮回答都会独立刷新来源、推荐问题和知识图谱，不会沿用旧证据。</p>
         </div>
         <div className="row">
-          <button onClick={() => { setConversationId(null); setMessages([]); setActiveMessageId(null); }}>新建会话</button>
           <button className="danger" onClick={deleteCurrentConversation} disabled={!conversationId}><Trash2 size={16} />删除会话</button>
         </div>
       </section>
-      <section className="askBox elevated">
-        <textarea value={question} onChange={(e) => setQuestion(e.target.value)} />
-        <div className="askActions">
-          <div className="chips">{sampleQuestions.map((item) => <button key={item} onClick={() => ask(item)}>{item}</button>)}</div>
-          <button className="primary askButton" onClick={() => ask()} disabled={loading}><Send size={18} />{loading ? "生成中" : "提问"}</button>
-        </div>
-      </section>
-      <section className="askCoreLayout" data-collapsed={sidebarCollapsed ? "1" : "0"}>
-        <aside className="conversationList">
-          <div className="conversationListHeader">
-            <h3>最近会话</h3>
+      <div className="askShell" data-collapsed={sidebarCollapsed ? "1" : "0"}>
+        <aside className="askSidebar">
+          <div className="askSidebarTop">
+            <button className="primary newChatBtn" onClick={newConversation}>
+              <Plus size={16} />新建会话
+            </button>
             <button className="iconBtn" onClick={toggleSidebar} title="收起侧边栏" aria-label="收起侧边栏">
               <PanelLeftClose size={16} />
             </button>
           </div>
-          {conversations.length === 0 && <div className="emptyState small">还没有会话。</div>}
-          {conversations.map((item) => (
-            <button key={item.id} className={item.id === conversationId ? "active" : ""} onClick={() => openConversation(item.id)}>
-              <strong>{item.title}</strong>
-              <span>{item.message_count} 条消息 · {new Date(item.updated_at).toLocaleString()}</span>
-            </button>
-          ))}
-        </aside>
-        {activeAssistant && (
-          <div className={`answerShell ${!canShowEvidence ? "single" : ""}`}>
-            <section className="answerPanel">
-              <div className="panelHeader">
-                {sidebarCollapsed && (
-                  <button className="iconBtn" onClick={toggleSidebar} title="展开侧边栏" aria-label="展开侧边栏">
-                    <PanelLeftOpen size={18} />
-                  </button>
-                )}
-                <h3>当前轮次详情</h3>
-                <StatusBadge result={activeAssistant} />
+          <div className="searchInput">
+            <Search size={16} />
+            <input
+              value={sidebarQuery}
+              onChange={(e) => setSidebarQuery(e.target.value)}
+              placeholder="搜索会话"
+            />
+          </div>
+
+          {showFavorites ? (
+            <FavoritesView
+              favorites={favorites}
+              onOpen={openFavorite}
+              onBack={() => setShowFavorites(false)}
+              sidebarQuery={sidebarQuery}
+            />
+          ) : (
+            <div className="sidebarScroll">
+              <div className="sidebarGroup">
+                <button className="favoritesEntry" onClick={() => setShowFavorites(true)}>
+                  <Heart size={14} />
+                  <span>收藏夹</span>
+                  <small>{favorites.length}</small>
+                </button>
               </div>
-              <MarkdownBlock content={activeAssistant.content} />
-              {activeAssistant.status === "llm_error" && <p className="warning">外部 LLM 调用失败，当前展示本地证据降级回答。</p>}
-            </section>
-            {canShowEvidence && (
-              <section className="sidePanel">
-                <h3>来源</h3>
-                <div className="sourceList">
-                  {activeAssistant.sources.map((source, index) => (
-                    <SourceCard key={source.chunk_id} source={source} token={token} index={index} />
+
+              {filteredConversations.length === 0 && (
+                <div className="emptyState small">{sidebarQuery ? "没有匹配的会话" : "还没有会话"}</div>
+              )}
+
+              {grouped.map((group) => (
+                <div key={group.label} className="sidebarGroup">
+                  <div className="sidebarGroupLabel">{group.label}</div>
+                  {group.items.map((item) => (
+                    <button
+                      key={item.id}
+                      className={`sidebarConvItem ${item.id === conversationId ? "active" : ""}`}
+                      onClick={() => openConversation(item.id)}
+                      title={item.title}
+                    >
+                      <span className="sidebarConvTitle">{item.title}</span>
+                    </button>
                   ))}
                 </div>
-                {activeAssistant.related_questions.length > 0 && <h3>相关问题</h3>}
-                <div className="stackButtons">{activeAssistant.related_questions.map((item) => <button key={item} onClick={() => ask(item)}>{item}</button>)}</div>
-              </section>
-            )}
-            {canShowEvidence && activeAssistant.graph.nodes.length > 0 && (
-              <section className="graphPanel widePanel">
-                <h3>关联知识图谱子图</h3>
-                <GraphCanvas graph={activeAssistant.graph} />
-              </section>
-            )}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
+        </aside>
 
-      {/* 上下文参考：完整对话消息流 */}
-      <section className="messageThread">
-        {messages.length === 0 && <div className="emptyState">开始提问后，这里会保留当前会话的上下文。</div>}
-        {messages.map((message) => (
-          <article key={message.id} className={`chatBubble ${message.role} ${message.id === activeMessageId ? "active" : ""}`} onClick={() => message.role === "assistant" && setActiveMessageId(message.id)}>
-            <header><strong>{message.role === "user" ? "你" : "助教"}</strong><time>{new Date(message.created_at).toLocaleTimeString()}</time></header>
-            {message.role === "assistant" ? <MarkdownBlock content={message.content} /> : <p>{message.content}</p>}
-            {message.role === "assistant" && <PerformanceStrip message={message} />}
-          </article>
+        <div className="askMain">
+          {sidebarCollapsed && (
+            <button className="iconBtn sidebarToggleFloat" onClick={toggleSidebar} title="展开侧边栏" aria-label="展开侧边栏">
+              <PanelLeftOpen size={18} />
+            </button>
+          )}
+
+          {/* 对话消息流（ChatGPT 风格核心区域） */}
+          <section className="messageThread">
+            {messages.length === 0 && (
+              <div className="emptyState">
+                开始提问后，这里会保留当前会话的上下文。<br />
+                <small style={{ marginTop: 8, display: "inline-block", color: "var(--muted)" }}>
+                  支持连续追问；每轮回答会独立刷新来源、推荐问题和知识图谱。
+                </small>
+              </div>
+            )}
+            {messages.map((message) => (
+              <article
+                key={message.id}
+                className={`chatBubble ${message.role} ${message.id === activeMessageId ? "active" : ""}`}
+                onClick={() => message.role === "assistant" && setActiveMessageId(message.id)}
+              >
+                <header>
+                  <strong>{message.role === "user" ? "你" : "助教"}</strong>
+                  <time>{new Date(message.created_at).toLocaleTimeString()}</time>
+                </header>
+                {message.role === "assistant" ? <MarkdownBlock content={message.content} /> : <p>{message.content}</p>}
+                {message.role === "assistant" && <PerformanceStrip message={message} />}
+              </article>
+            ))}
+          </section>
+
+          {/* 当前轮次详情：来源、图谱、推荐问题 */}
+          {activeAssistant && (
+            <div className={`answerShell ${!canShowEvidence ? "single" : ""}`}>
+              <section className="answerPanel">
+                <div className="panelHeader">
+                  <h3>当前轮次详情</h3>
+                  <StatusBadge result={activeAssistant} />
+                </div>
+                <MarkdownBlock content={activeAssistant.content} />
+                {activeAssistant.status === "llm_error" && (
+                  <p className="warning">外部 LLM 调用失败，当前展示本地证据降级回答。</p>
+                )}
+              </section>
+              {canShowEvidence && (
+                <section className="sidePanel">
+                  <h3>来源</h3>
+                  <div className="sourceList">
+                    {activeAssistant.sources.map((source, index) => (
+                      <SourceCard key={source.chunk_id} source={source} token={token} index={index} />
+                    ))}
+                  </div>
+                  {activeAssistant.related_questions.length > 0 && <h3>相关问题</h3>}
+                  <div className="stackButtons">
+                    {activeAssistant.related_questions.map((item) => (
+                      <button key={item} onClick={() => ask(item)}>{item}</button>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {canShowEvidence && activeAssistant.graph.nodes.length > 0 && (
+                <section className="graphPanel widePanel">
+                  <h3>关联知识图谱子图</h3>
+                  <GraphCanvas graph={activeAssistant.graph} />
+                </section>
+              )}
+            </div>
+          )}
+
+          {/* 输入框（ChatGPT 风格固定在底部） */}
+          <section className="askBox elevated">
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ask();
+              }}
+              placeholder="向智能助教提问…(Ctrl/⌘ + Enter 发送)"
+            />
+            <div className="askActions">
+              <div className="chips">
+                {sampleQuestions.map((item) => (
+                  <button key={item} onClick={() => ask(item)}>{item}</button>
+                ))}
+              </div>
+              <button className="primary askButton" onClick={() => ask()} disabled={loading}>
+                <Send size={18} />{loading ? "生成中" : "提问"}
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 会话列表按时间分组 ── */
+function groupByDate(items: ChatConversation[]): { label: string; items: ChatConversation[] }[] {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const groups: Record<string, ChatConversation[]> = { 今天: [], 昨天: [], 本周: [], 更早: [] };
+  items.forEach((item) => {
+    const d = new Date(item.updated_at);
+    if (d >= today) groups["今天"].push(item);
+    else if (d >= yesterday) groups["昨天"].push(item);
+    else if (d >= weekAgo) groups["本周"].push(item);
+    else groups["更早"].push(item);
+  });
+
+  return Object.entries(groups)
+    .filter(([, arr]) => arr.length > 0)
+    .map(([label, items]) => ({ label, items }));
+}
+
+/* ── 收藏夹视图（合并自原 HistoryView）── */
+function FavoritesView({
+  favorites,
+  onOpen,
+  onBack,
+  sidebarQuery
+}: {
+  favorites: HistoryItem[];
+  onOpen: (item: HistoryItem) => void;
+  onBack: () => void;
+  sidebarQuery: string;
+}) {
+  const filtered = favorites.filter((f) => {
+    if (!sidebarQuery.trim()) return true;
+    return f.question.toLowerCase().includes(sidebarQuery.toLowerCase());
+  });
+
+  return (
+    <div className="sidebarScroll">
+      <div className="sidebarGroup">
+        <button className="favoritesEntry" onClick={onBack}>
+          <ChevronDown size={14} style={{ transform: "rotate(-90deg)" }} />
+          <span>返回会话列表</span>
+        </button>
+        <div className="sidebarGroupLabel">收藏夹</div>
+        {filtered.length === 0 && (
+          <div className="emptyState small">{sidebarQuery ? "没有匹配的收藏" : "还没有收藏任何回答"}</div>
+        )}
+        {filtered.map((item) => (
+          <button
+            key={item.id}
+            className="sidebarConvItem"
+            onClick={() => onOpen(item)}
+            title={item.question}
+          >
+            <span className="sidebarConvTitle">{item.question}</span>
+            <Heart size={12} fill="currentColor" style={{ color: "var(--danger)", flexShrink: 0 }} />
+          </button>
         ))}
-      </section>
+      </div>
     </div>
   );
 }
@@ -596,79 +790,116 @@ function GraphExplorer({ token, setToast }: { token: string; setToast: (value: s
 function HistoryView({ token, setToast }: { token: string; setToast: (value: string) => void }) {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
-  const [filter, setFilter] = useState<"all" | "favorites">("all");
+  const [noteContent, setNoteContent] = useState("");
+  const [noteLoaded, setNoteLoaded] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [query, setQuery] = useState("");
 
   async function load() {
     try {
-      const data = filter === "favorites" ? await api.favorites(token) : await api.history(token);
-      setItems(data);
+      setItems(await api.favorites(token));
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "加载历史失败");
+      setToast(err instanceof Error ? err.message : "加载收藏失败");
     }
   }
 
-  async function clear() {
+  useEffect(() => { load(); }, []);
+
+  // 选中条目时加载对应笔记
+  useEffect(() => {
+    if (!selected) {
+      setNoteContent("");
+      setNoteLoaded(false);
+      return;
+    }
+    setNoteLoaded(false);
+    api.getNote(token, selected.id)
+      .then((note) => {
+        setNoteContent(note?.content ?? "");
+        setNoteLoaded(true);
+      })
+      .catch(() => {
+        setNoteContent("");
+        setNoteLoaded(true);
+      });
+  }, [selected?.id, token]);
+
+  async function saveNote() {
+    if (!selected) return;
+    setNoteSaving(true);
     try {
-      await api.clearHistory(token);
-      setSelected(null);
-      await load();
+      await api.saveNote(token, selected.id, noteContent);
+      setToast("笔记已保存");
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "清空失败");
+      setToast(err instanceof Error ? err.message : "保存笔记失败");
+    } finally {
+      setNoteSaving(false);
     }
   }
 
-  async function toggleFavorite(item: HistoryItem, e: React.MouseEvent) {
+  async function unfavorite(item: HistoryItem, e: React.MouseEvent) {
     e.stopPropagation();
     try {
-      const result = await api.toggleFavorite(token, item.id);
-      if (filter === "all") {
-        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorited: result.favorited } : i)));
-      } else {
-        setItems((prev) => prev.filter((i) => i.id !== item.id));
-      }
-      if (selected?.id === item.id) {
-        setSelected((prev) => (prev ? { ...prev, favorited: result.favorited } : prev));
-      }
+      await api.toggleFavorite(token, item.id);
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      if (selected?.id === item.id) setSelected(null);
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "收藏操作失败");
+      setToast(err instanceof Error ? err.message : "取消收藏失败");
     }
   }
 
-  useEffect(() => { load(); }, [filter]);
+  const filtered = items.filter((item) => {
+    if (!query.trim()) return true;
+    return item.question.toLowerCase().includes(query.toLowerCase()) ||
+      item.answer_summary.toLowerCase().includes(query.toLowerCase());
+  });
 
   return (
     <div className="workspace">
       <section className="topBand">
-        <div><h2>学习历史</h2><p>点击任意记录可查看当时回答全文和引用来源。</p></div>
-        <div className="row">
-          <div className="segmented">
-            <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>全部</button>
-            <button className={filter === "favorites" ? "active" : ""} onClick={() => setFilter("favorites")}><Heart size={14} />收藏</button>
-          </div>
-          <button className="danger" onClick={clear}><Trash2 size={17} />清空</button>
+        <div>
+          <h2>我的笔记</h2>
+          <p>收藏的回答会自动汇总到这里，可以为每条回答添加学习笔记。所有数据仅自己可见。</p>
+        </div>
+        <div className="searchInput" style={{ maxWidth: 280 }}>
+          <Search size={16} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索收藏"
+          />
         </div>
       </section>
       <section className="historyLayout">
         <div className="historyList">
-          {items.map((item) => (
-            <article key={item.id} className={selected?.id === item.id ? "active" : ""} onClick={() => setSelected(item)}>
-              <time>{new Date(item.created_at).toLocaleString()}</time>
-              <h3>{item.question}</h3>
-              <p>{item.answer_summary}</p>
+          {filtered.length === 0 && (
+            <div className="emptyState small">
+              {items.length === 0 ? "还没有收藏任何回答。在问答页点击回答旁的爱心即可收藏。" : "没有匹配的收藏"}
+            </div>
+          )}
+          {filtered.map((item) => (
+            <article
+              key={item.id}
+              className={selected?.id === item.id ? "active" : ""}
+              onClick={() => setSelected(item)}
+            >
               <div className="historyActions">
+                <time>{new Date(item.created_at).toLocaleString()}</time>
                 <button
-                  className={`favoriteBtn ${item.favorited ? "favorited" : ""}`}
-                  onClick={(e) => toggleFavorite(item, e)}
-                  title={item.favorited ? "取消收藏" : "收藏"}
+                  className="favoriteBtn favorited"
+                  onClick={(e) => unfavorite(item, e)}
+                  title="取消收藏"
                 >
-                  <Heart size={16} fill={item.favorited ? "currentColor" : "none"} />
+                  <Heart size={16} fill="currentColor" />
                 </button>
               </div>
+              <h3>{item.question}</h3>
+              <p>{item.answer_summary}</p>
             </article>
           ))}
         </div>
         <aside className="historyDetail">
-          {!selected && <div className="emptyState">选择一条历史记录查看完整回答。</div>}
+          {!selected && <div className="emptyState">选择一条收藏查看完整回答并编辑笔记。</div>}
           {selected && (
             <>
               <time>{new Date(selected.created_at).toLocaleString()}</time>
@@ -688,6 +919,27 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
                   </details>
                 ))}
               </div>
+              <h3>我的笔记</h3>
+              {noteLoaded ? (
+                <>
+                  <textarea
+                    className="noteEditor"
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                    placeholder="写下你的学习心得、疑问或延伸思考…"
+                  />
+                  <div className="row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
+                    <span style={{ color: "var(--muted)", fontSize: 12, marginRight: "auto" }}>
+                      {noteContent.length} 字
+                    </span>
+                    <button className="primary" onClick={saveNote} disabled={noteSaving}>
+                      {noteSaving ? "保存中" : "保存笔记"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="emptyState small">加载笔记中…</div>
+              )}
             </>
           )}
         </aside>
