@@ -116,8 +116,8 @@ function App() {
 
 function AuthScreen({ onAuth, stats }: { onAuth: (token: string, username: string, role: "admin" | "student") => void; stats: SystemStats | null }) {
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("Admin@123456");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 

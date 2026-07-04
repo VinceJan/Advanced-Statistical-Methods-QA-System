@@ -176,7 +176,7 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
 }
 .conversationList button.active { border-color: var(--brand); background: #eaf6f8; }
 .conversationList span { color: var(--muted); font-size: 12px; line-height: 1.45; }
-.messageThread { display: grid; gap: 12px; align-content: start; min-height: 260px; }
+.messageThread { display: grid; gap: 12px; align-content: start; min-height: 260px; max-height: 420px; overflow: auto; }
 .chatBubble {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -322,11 +322,11 @@ h3 { margin: 0 0 12px; font-size: 17px; }
   min-height: 66px;
   height: auto;
   display: grid;
-  justify-items: start;
+  justify-items: center;
   align-content: center;
   gap: 3px;
   padding: 10px;
-  text-align: left;
+  text-align: center;
   overflow: visible;
 }
 .conceptScroll button.active { border-color: var(--brand); background: #eaf6f8; }
