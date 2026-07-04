@@ -148,11 +148,25 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
 .answerShell.single { grid-template-columns: 1fr; }
 .widePanel { grid-column: 1 / -1; }
 
-.conversationLayout {
+.askCoreLayout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: 18px;
 }
+.askCoreLayout[data-collapsed="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.askCoreLayout[data-collapsed="1"] .conversationList {
+  display: none;
+}
+.conversationListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.conversationListHeader h3 { margin: 0; }
 .conversationList, .messageThread, .historyDetail {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -176,7 +190,7 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
 }
 .conversationList button.active { border-color: var(--brand); background: #eaf6f8; }
 .conversationList span { color: var(--muted); font-size: 12px; line-height: 1.45; }
-.messageThread { display: grid; gap: 12px; align-content: start; min-height: 260px; max-height: 420px; overflow: auto; }
+.messageThread { display: grid; gap: 12px; align-content: start; min-height: 260px; max-height: 520px; overflow: auto; }
 .chatBubble {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -575,7 +589,9 @@ time { color: var(--muted); font-size: 12px; }
 @media (max-width: 1080px) {
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; }
-  .answerShell, .graphLayout, .adminGrid, .conversationLayout, .historyLayout { grid-template-columns: 1fr; }
+  .askCoreLayout { grid-template-columns: 1fr; }
+  .askCoreLayout[data-collapsed="1"] .conversationList { display: grid; }
+  .answerShell, .graphLayout, .adminGrid, .historyLayout { grid-template-columns: 1fr; }
   .adminCard:nth-child(3), .adminCard:nth-child(5), .adminCard:nth-child(7) { grid-column: auto; }
   .historyDetail { position: static; max-height: none; }
   .userActions { grid-template-columns: 1fr 1fr; }

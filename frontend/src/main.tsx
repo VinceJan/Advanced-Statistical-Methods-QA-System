@@ -21,6 +21,8 @@ import {
   LogIn,
   LogOut,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Send,
@@ -253,6 +255,17 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeMessageId, setActiveMessageId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem("qa_ask_sidebar_collapsed") === "1";
+  });
+
+  function toggleSidebar() {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("qa_ask_sidebar_collapsed", next ? "1" : "0");
+      return next;
+    });
+  }
 
   async function loadConversations(nextId = conversationId) {
     const items = await api.conversations(token);
@@ -331,9 +344,14 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
           <button className="primary askButton" onClick={() => ask()} disabled={loading}><Send size={18} />{loading ? "生成中" : "提问"}</button>
         </div>
       </section>
-      <section className="conversationLayout">
+      <section className="askCoreLayout" data-collapsed={sidebarCollapsed ? "1" : "0"}>
         <aside className="conversationList">
-          <h3>最近会话</h3>
+          <div className="conversationListHeader">
+            <h3>最近会话</h3>
+            <button className="iconBtn" onClick={toggleSidebar} title="收起侧边栏" aria-label="收起侧边栏">
+              <PanelLeftClose size={16} />
+            </button>
+          </div>
           {conversations.length === 0 && <div className="emptyState small">还没有会话。</div>}
           {conversations.map((item) => (
             <button key={item.id} className={item.id === conversationId ? "active" : ""} onClick={() => openConversation(item.id)}>
@@ -342,47 +360,54 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
             </button>
           ))}
         </aside>
-        <section className="messageThread">
-          {messages.length === 0 && <div className="emptyState">开始提问后，这里会保留当前会话的上下文。</div>}
-          {messages.map((message) => (
-            <article key={message.id} className={`chatBubble ${message.role} ${message.id === activeMessageId ? "active" : ""}`} onClick={() => message.role === "assistant" && setActiveMessageId(message.id)}>
-              <header><strong>{message.role === "user" ? "你" : "助教"}</strong><time>{new Date(message.created_at).toLocaleTimeString()}</time></header>
-              {message.role === "assistant" ? <MarkdownBlock content={message.content} /> : <p>{message.content}</p>}
-              {message.role === "assistant" && <PerformanceStrip message={message} />}
-            </article>
-          ))}
-        </section>
-      </section>
-      {activeAssistant && (
-        <div className={`answerShell ${!canShowEvidence ? "single" : ""}`}>
-          <section className="answerPanel">
-            <div className="panelHeader">
-              <h3>当前轮次详情</h3>
-              <StatusBadge result={activeAssistant} />
-            </div>
-            <MarkdownBlock content={activeAssistant.content} />
-            {activeAssistant.status === "llm_error" && <p className="warning">外部 LLM 调用失败，当前展示本地证据降级回答。</p>}
-          </section>
-          {canShowEvidence && (
-            <section className="sidePanel">
-              <h3>来源</h3>
-              <div className="sourceList">
-                {activeAssistant.sources.map((source, index) => (
-                  <SourceCard key={source.chunk_id} source={source} token={token} index={index} />
-                ))}
+        {activeAssistant && (
+          <div className={`answerShell ${!canShowEvidence ? "single" : ""}`}>
+            <section className="answerPanel">
+              <div className="panelHeader">
+                {sidebarCollapsed && (
+                  <button className="iconBtn" onClick={toggleSidebar} title="展开侧边栏" aria-label="展开侧边栏">
+                    <PanelLeftOpen size={18} />
+                  </button>
+                )}
+                <h3>当前轮次详情</h3>
+                <StatusBadge result={activeAssistant} />
               </div>
-              {activeAssistant.related_questions.length > 0 && <h3>相关问题</h3>}
-              <div className="stackButtons">{activeAssistant.related_questions.map((item) => <button key={item} onClick={() => ask(item)}>{item}</button>)}</div>
+              <MarkdownBlock content={activeAssistant.content} />
+              {activeAssistant.status === "llm_error" && <p className="warning">外部 LLM 调用失败，当前展示本地证据降级回答。</p>}
             </section>
-          )}
-          {canShowEvidence && activeAssistant.graph.nodes.length > 0 && (
-            <section className="graphPanel widePanel">
-              <h3>关联知识图谱子图</h3>
-              <GraphCanvas graph={activeAssistant.graph} />
-            </section>
-          )}
-        </div>
-      )}
+            {canShowEvidence && (
+              <section className="sidePanel">
+                <h3>来源</h3>
+                <div className="sourceList">
+                  {activeAssistant.sources.map((source, index) => (
+                    <SourceCard key={source.chunk_id} source={source} token={token} index={index} />
+                  ))}
+                </div>
+                {activeAssistant.related_questions.length > 0 && <h3>相关问题</h3>}
+                <div className="stackButtons">{activeAssistant.related_questions.map((item) => <button key={item} onClick={() => ask(item)}>{item}</button>)}</div>
+              </section>
+            )}
+            {canShowEvidence && activeAssistant.graph.nodes.length > 0 && (
+              <section className="graphPanel widePanel">
+                <h3>关联知识图谱子图</h3>
+                <GraphCanvas graph={activeAssistant.graph} />
+              </section>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* 上下文参考：完整对话消息流 */}
+      <section className="messageThread">
+        {messages.length === 0 && <div className="emptyState">开始提问后，这里会保留当前会话的上下文。</div>}
+        {messages.map((message) => (
+          <article key={message.id} className={`chatBubble ${message.role} ${message.id === activeMessageId ? "active" : ""}`} onClick={() => message.role === "assistant" && setActiveMessageId(message.id)}>
+            <header><strong>{message.role === "user" ? "你" : "助教"}</strong><time>{new Date(message.created_at).toLocaleTimeString()}</time></header>
+            {message.role === "assistant" ? <MarkdownBlock content={message.content} /> : <p>{message.content}</p>}
+            {message.role === "assistant" && <PerformanceStrip message={message} />}
+          </article>
+        ))}
+      </section>
     </div>
   );
 }
