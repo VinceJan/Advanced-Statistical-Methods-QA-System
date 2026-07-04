@@ -244,7 +244,6 @@ curl -fsS https://aistudyassistant.bluesclawd.dev/api/health
 ## 当前已知的非致命问题
 
 - 前端构建会提示 bundle 超过 500KB，这是 Cytoscape、KaTeX、Markdown 等依赖带来的体积警告；当前不影响课程演示。
-- pytest 有 `datetime.utcnow()` 的弃用警告；当前不影响功能，未来可统一迁移到 timezone-aware datetime。
 - `.pptx` 文件是二进制文件，如果只是打开/预览后出现 Git modified，要先确认是不是实际内容变化，别盲目提交。
 
 ## 判断是否可以收工
