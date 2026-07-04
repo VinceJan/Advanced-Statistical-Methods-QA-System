@@ -276,9 +276,29 @@ class RagService:
         retrieval_confidence = sources[0].score if sources else 0.0
         raw = raw_question or question
         has_scope_hint = any(hint.lower() in raw.lower() or hint.lower() in question.lower() for hint in COURSE_SCOPE_HINTS)
-        concept_confidence = min(1.0, len(matched) / 2)
-        retrieval_confidence_norm = min(1.0, retrieval_confidence / 20)
-        confidence = round(max(concept_confidence, retrieval_confidence_norm), 3)
+
+        # 知识点匹配度：0-1，匹配越多越高，但边际递减
+        concept_confidence = min(1.0, len(matched) / 3 + (0.15 if len(matched) >= 1 else 0))
+
+        # 检索得分归一化：使用 sigmoid 风格映射，避免线性除法导致过早饱和
+        # 典型检索得分范围 0-50，20 分左右为较强证据
+        retrieval_confidence_norm = 1.0 / (1.0 + math.exp(-(retrieval_confidence - 12) / 6))
+
+        # 综合置信度：检索权重更高（60%），知识点匹配占 40%
+        confidence = 0.4 * concept_confidence + 0.6 * retrieval_confidence_norm
+
+        # 根据检索强度分档衰减，避免弱证据给出过高置信度
+        if retrieval_confidence < RETRIEVAL_THRESHOLD:
+            confidence *= 0.5
+        elif retrieval_confidence < STRONG_RETRIEVAL_THRESHOLD:
+            confidence *= 0.85
+
+        # 硬上限：无来源或极少匹配时，置信度不超过 0.55
+        if not sources or len(matched) == 0:
+            confidence = min(confidence, 0.55)
+
+        confidence = round(max(0.3, min(0.95, confidence)), 3)
+
         if any(hint in raw.lower() for hint in CLEAR_OUT_OF_SCOPE_HINTS):
             matched = []
             sources = []
