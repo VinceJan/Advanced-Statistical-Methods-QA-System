@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import QAPair, User
+from ..models import QAPair, User, utcnow
 from ..schemas import QAPairCreate, QAPairOut, QAPairUpdate
 from ..security import current_user, require_admin
 from ..serialization import dumps, loads_list
@@ -44,8 +42,8 @@ def create_qa_pair(payload: QAPairCreate, db: Session = Depends(get_db), _: User
         concept_ids_json=dumps(payload.concept_ids),
         source_refs_json=dumps(payload.source_refs),
         quality_status=payload.quality_status,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=utcnow(),
+        updated_at=utcnow(),
     )
     db.add(pair)
     db.commit()
@@ -66,7 +64,7 @@ def update_qa_pair(pair_id: int, payload: QAPairUpdate, db: Session = Depends(ge
         pair.concept_ids_json = dumps(data["concept_ids"])
     if data.get("source_refs") is not None:
         pair.source_refs_json = dumps(data["source_refs"])
-    pair.updated_at = datetime.utcnow()
+    pair.updated_at = utcnow()
     db.commit()
     db.refresh(pair)
     return qa_to_out(pair)

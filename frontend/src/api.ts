@@ -28,6 +28,10 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
     } catch {
       // ignore json parse errors
     }
+    // 401 未授权：token 过期或被注销，广播事件让 App 跳回登录页
+    if (response.status === 401 && token) {
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"));
+    }
     throw new ApiError(response.status, message);
   }
   return response.json() as Promise<T>;

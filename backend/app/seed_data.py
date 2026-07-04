@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .models import Concept, GraphEdge, QAPair, TextChunk
+from .models import Concept, GraphEdge, QAPair, TextChunk, utcnow
 from .serialization import dumps
 
 
@@ -967,7 +966,7 @@ def _seed_edges(db: Session) -> None:
 def _seed_qa_pairs(db: Session) -> None:
     concepts = {c.slug: c for c in db.query(Concept).all()}
     by_slug = concept_index()
-    now = datetime.utcnow()
+    now = utcnow()
 
     def add_pair(question: str, answer: str, typ: str, slugs: list[str], refs: list[dict[str, Any]] | None = None) -> None:
         db.add(

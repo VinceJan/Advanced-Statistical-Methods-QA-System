@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+
+
+def utcnow() -> datetime:
+    """返回 naive UTC 时间，等价于旧的 utcnow()，避免 Python 3.12+ deprecation 警告。"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class User(Base):
@@ -15,7 +20,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default="student", index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     sessions: Mapped[list["SessionToken"]] = relationship(back_populates="user")
     histories: Mapped[list["QuestionHistory"]] = relationship(back_populates="user")
@@ -29,7 +34,7 @@ class SessionToken(Base):
 
     token: Mapped[str] = mapped_column(String(160), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user: Mapped[User] = relationship(back_populates="sessions")
 
@@ -66,8 +71,8 @@ class QAPair(Base):
     concept_ids_json: Mapped[str] = mapped_column(Text, default="[]")
     source_refs_json: Mapped[str] = mapped_column(Text, default="[]")
     quality_status: Mapped[str] = mapped_column(String(40), default="已校对")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class TextChunk(Base):
@@ -89,8 +94,8 @@ class ChatConversation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     title: Mapped[str] = mapped_column(String(160), default="新会话")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
     user: Mapped[User] = relationship(back_populates="conversations")
     messages: Mapped[list["ChatMessage"]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
@@ -112,7 +117,7 @@ class ChatMessage(Base):
     matched_concepts_json: Mapped[str] = mapped_column(Text, default="[]")
     graph_json: Mapped[str] = mapped_column(Text, default='{"nodes":[],"edges":[]}')
     performance_json: Mapped[str] = mapped_column(Text, default="{}")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     conversation: Mapped[ChatConversation] = relationship(back_populates="messages")
 
@@ -128,7 +133,7 @@ class QuestionHistory(Base):
     answer: Mapped[str] = mapped_column(Text)
     answer_summary: Mapped[str] = mapped_column(Text)
     sources_json: Mapped[str] = mapped_column(Text, default="[]")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user: Mapped[User] = relationship(back_populates="histories")
 
@@ -139,7 +144,7 @@ class Favorite(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     history_id: Mapped[int] = mapped_column(ForeignKey("question_history.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user: Mapped[User] = relationship(back_populates="favorites")
 
@@ -151,8 +156,8 @@ class UserNote(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     history_id: Mapped[int] = mapped_column(ForeignKey("question_history.id"), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     user: Mapped[User] = relationship(back_populates="notes")
 
@@ -162,4 +167,4 @@ class SystemConfig(Base):
 
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

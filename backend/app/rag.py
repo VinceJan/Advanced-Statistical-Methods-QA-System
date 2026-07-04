@@ -5,14 +5,13 @@ import re
 import time
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .graph_service import find_concepts, get_subgraph, recommended_questions
 from .llm import LLMClient
-from .models import ChatConversation, ChatMessage, Concept, GraphEdge, QAPair, QuestionHistory, TextChunk, User
+from .models import ChatConversation, ChatMessage, Concept, GraphEdge, QAPair, QuestionHistory, TextChunk, User, utcnow
 from .schemas import AskResponse, PerformanceOut, SourceOut
 from .serialization import dumps, loads_list
 
@@ -171,7 +170,7 @@ class RagService:
             performance_json=perf.model_dump_json(),
         )
         conversation.title = conversation.title if conversation.title != "新会话" else make_title(question)
-        conversation.updated_at = datetime.utcnow()
+        conversation.updated_at = utcnow()
         self.db.add(assistant_message)
         self.db.flush()
         history = QuestionHistory(

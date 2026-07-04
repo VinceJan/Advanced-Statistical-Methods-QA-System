@@ -134,6 +134,21 @@ function App() {
     api.stats().then(setStats).catch(() => setStats(null));
   }, []);
 
+  useEffect(() => {
+    const handler = () => {
+      // token 失效：清状态 + 提示用户
+      setToken("");
+      setUsername("");
+      setRole("student");
+      localStorage.removeItem("qa_token");
+      localStorage.removeItem("qa_username");
+      localStorage.removeItem("qa_role");
+      setToast("登录已失效，请重新登录");
+    };
+    window.addEventListener("auth:unauthorized", handler);
+    return () => window.removeEventListener("auth:unauthorized", handler);
+  }, []);
+
   function onAuth(authToken: string, name: string, nextRole: "admin" | "student") {
     setToken(authToken);
     setUsername(name);
@@ -264,6 +279,8 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
   const [showFavorites, setShowFavorites] = useState(false);
   const [showFullThread, setShowFullThread] = useState(false);
   const [favoritedIds, setFavoritedIds] = useState<Set<number>>(new Set());
+  // 防止同一 message 重复点击收藏按钮触发并发 API
+  const favoriteInflightRef = useRef<Set<number>>(new Set());
 
   function toggleSidebar() {
     setSidebarCollapsed((prev) => {
@@ -274,9 +291,16 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
   }
 
   async function loadConversations(nextId = conversationId) {
-    const items = await api.conversations(token);
-    setConversations(items);
-    if (nextId) await openConversation(nextId, false);
+    try {
+      const items = await api.conversations(token);
+      setConversations(items);
+      if (nextId) await openConversation(nextId, false);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setConversations([]);
+        setToast(err instanceof Error ? err.message : "加载会话失败");
+      }
+    }
   }
 
   async function loadFavorites() {
@@ -285,12 +309,17 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
       setFavorites(data);
       setFavoritedIds(new Set(data.map((f) => f.message_id).filter((id): id is number => id != null)));
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "加载收藏失败");
+      // 401 由 api.request 统一处理；其他错误仅提示，不动 favoritedIds（保留乐观更新）
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setToast(err instanceof Error ? err.message : "加载收藏失败");
+      }
     }
   }
 
   async function toggleMessageFavorite(message: ChatMessage, e: React.MouseEvent) {
     e.stopPropagation();
+    if (favoriteInflightRef.current.has(message.id)) return;
+    favoriteInflightRef.current.add(message.id);
     try {
       const result = await fetchHistoryIdForMessage(message);
       if (result == null) {
@@ -306,29 +335,32 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
       });
       // 实时同步侧栏收藏夹列表：取消时立即移除，新增时刷新整个列表（数量小，开销可忽略）
       if (res.favorited) {
-        // 新增：刷新收藏夹（拿完整 HistoryItem 包含 question/answer 等）
         loadFavorites();
       } else {
-        // 取消：直接从 state 移除（按 message_id 匹配）
         setFavorites((prev) => prev.filter((f) => f.message_id !== message.id));
       }
       setToast(res.favorited ? "已加入收藏" : "已取消收藏");
     } catch (err) {
       setToast(err instanceof Error ? err.message : "收藏操作失败");
+    } finally {
+      favoriteInflightRef.current.delete(message.id);
     }
   }
 
-  // 缓存 history 列表，避免每次收藏都全量拉
-  const historyCacheRef = useRef<{ items: HistoryItem[]; fetchedAt: number } | null>(null);
+  // 缓存 history 列表（按 message_id 建索引），避免每次收藏都线性扫描
+  const historyCacheRef = useRef<{ index: Map<number, number>; fetchedAt: number } | null>(null);
   async function fetchHistoryIdForMessage(message: ChatMessage): Promise<number | null> {
     try {
       const now = Date.now();
       if (!historyCacheRef.current || now - historyCacheRef.current.fetchedAt > 30000) {
         const items = await api.history(token);
-        historyCacheRef.current = { items, fetchedAt: now };
+        const index = new Map<number, number>();
+        for (const item of items) {
+          if (item.message_id != null) index.set(item.message_id, item.id);
+        }
+        historyCacheRef.current = { index, fetchedAt: now };
       }
-      const match = historyCacheRef.current.items.find((item) => item.message_id === message.id);
-      return match?.id ?? null;
+      return historyCacheRef.current.index.get(message.id) ?? null;
     } catch {
       return null;
     }
@@ -389,21 +421,34 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
     setMessages([]);
     setActiveMessageId(null);
     setQuestion("");
+    setShowFullThread(false);
+    setShowFavorites(false);
+    setSidebarQuery("");
+    historyCacheRef.current = null;
   }
+
+  const askInFlightRef = useRef(0);
 
   async function ask(q = question) {
     if (!q.trim()) return;
     setQuestion(q);
     setLoading(true);
+    const requestId = ++askInFlightRef.current;
     try {
       const result = await api.ask(q, token, conversationId);
+      // 只接受最新一次请求的结果，避免旧请求覆盖新状态
+      if (requestId !== askInFlightRef.current) return;
       setConversationId(result.conversation_id);
       setActiveMessageId(result.message_id);
       await loadConversations(result.conversation_id);
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "问答失败");
+      if (requestId === askInFlightRef.current) {
+        setToast(err instanceof Error ? err.message : "问答失败");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === askInFlightRef.current) {
+        setLoading(false);
+      }
     }
   }
 
@@ -505,7 +550,6 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
           {/* 对话消息流：只显示用户提问序列，AI 完整回答在下方详情区 */}
           {(() => {
             const userMessages = messages.filter((m) => m.role === "user");
-            const lastUserIndex = userMessages.length > 0 ? messages.lastIndexOf(userMessages[userMessages.length - 1]) : -1;
             const defaultVisibleCount = userMessages.length <= 1 ? userMessages.length : 1;
             const visibleUsers = showFullThread
               ? userMessages
@@ -525,9 +569,13 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
                     onClick={() => {
                       // 点击用户问题时，定位到该问题对应的 assistant 回答
                       const idx = messages.findIndex((m) => m.id === message.id);
-                      if (idx >= 0) {
-                        const nextAssistant = messages.slice(idx).find((m) => m.role === "assistant");
-                        if (nextAssistant) setActiveMessageId(nextAssistant.id);
+                      if (idx < 0) return;
+                      const nextAssistant = messages.slice(idx).find((m) => m.role === "assistant");
+                      if (nextAssistant) {
+                        setActiveMessageId(nextAssistant.id);
+                      } else {
+                        // 该问题无 assistant 回答（可能 LLM 失败或还在生成中）
+                        setToast("该问题暂无回答");
                       }
                     }}
                   >
@@ -573,6 +621,7 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
                 {activeAssistant.status === "llm_error" && (
                   <p className="warning">外部 LLM 调用失败，当前展示本地证据降级回答。</p>
                 )}
+                <PerformanceStrip message={activeAssistant} />
               </section>
               {canShowEvidence && (
                 <section className="sidePanel">
@@ -731,19 +780,6 @@ function PerformanceStrip({ message }: { message: ChatMessage }) {
 
 function MarkdownBlock({ content }: { content: string }) {
   return <div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{content}</ReactMarkdown></div>;
-}
-
-/* ── 消息流中的 AI 回答预览：去 Markdown 格式、截前 200 字 ── */
-function MessagePreview({ content }: { content: string }) {
-  const stripped = content
-    .replace(/```[\s\S]*?```/g, "")
-    .replace(/^#+\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\n+/g, " ")
-    .trim();
-  const truncated = stripped.length > 200 ? stripped.slice(0, 200) + "…" : stripped;
-  return <p className="messagePreview">{truncated || "(无内容)"}</p>;
 }
 
 function QAManager({ token, setToast }: { token: string; setToast: (value: string) => void }) {

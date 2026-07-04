@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from .models import SystemConfig
+from .models import SystemConfig, utcnow
 from .settings import settings
 
 
@@ -31,7 +30,7 @@ def set_config(db: Session, key: str, value: str) -> None:
     item = db.get(SystemConfig, key)
     if item:
         item.value = value
-        item.updated_at = datetime.utcnow()
+        item.updated_at = utcnow()
     else:
         db.add(SystemConfig(key=key, value=value))
 
