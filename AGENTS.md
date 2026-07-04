@@ -41,6 +41,14 @@
 - 前端 API 封装：`frontend/src/api.ts`。
 - 前端类型：`frontend/src/types.ts`。
 
+## 文档入口
+
+- 新 Agent 接手时优先阅读：`README.md`、`AGENTS.md`、`docs/Agent接手指南.md`、`docs/架构与功能说明.md`、`docs/运维手册.md`。
+- 文档总索引：`docs/README.md`。
+- 题目、目标、约束和上下文等过程性材料统一放在 `docs/project/`，不要再移回根目录。
+- 日常部署、发布、回滚、备份和故障排查以 `docs/运维手册.md` 为准。
+- 架构、模块职责、数据表、问答流程和扩展方向以 `docs/架构与功能说明.md` 为准。
+
 ## 功能不变量
 
 - 无关问题必须返回 `out_of_scope`，且 `sources=[]`、`related_questions=[]`、`graph.nodes=[]`、`graph.edges=[]`。
@@ -62,6 +70,12 @@
 - Docker 入口包括 `Dockerfile.backend`、`frontend/Dockerfile`、`docker-compose.yml`、`docker-compose.server.yml`、`deploy/Caddyfile`。
 - `deliverables/` 保存课程答辩 PPT、汇报 PPT 和演讲稿；如内容大改，运行 `scripts/make_ppt_decks.py` 重新生成。
 
+## 根目录规则
+
+- 根目录只保留项目入口、运行入口和仓库级配置，例如 `README.md`、`AGENTS.md`、`.env.example`、`.gitignore`、`.dockerignore`、`Dockerfile.backend`、`docker-compose.yml`、`docker-compose.server.yml`、教材 PDF 和关键脚本目录。
+- 课程过程文档、目标契约、上下文、验收、运维、架构说明放入 `docs/` 或 `docs/project/`。
+- Dockerfile 和 Compose 文件保留在根目录是刻意设计，方便服务器部署和 Docker 构建上下文，不要仅为“看起来整齐”移动它们。
+
 ## 验证要求
 
 完成任何功能修改后至少运行：
@@ -75,5 +89,7 @@
 ## 文档同步要求
 
 - 改 API、环境变量、数据模型、部署方式时，同步更新 `README.md`、`docs/部署方案.md` 或相关 docs。
+- 改线上部署、发布、回滚、备份、域名、端口或 Caddy/Nginx 反代时，同步更新 `docs/运维手册.md`。
+- 改模块职责、数据流、表结构或核心架构时，同步更新 `docs/架构与功能说明.md`。
 - 改多轮问答、RAG 可信度、权限边界、视觉验收时，同步更新 `docs/对抗性审查.md` 和 `docs/验收记录.md`。
 - 不要在 `AGENTS.md` 追加历史叙事；只写后续实现必须遵守的规则。

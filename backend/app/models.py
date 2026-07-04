@@ -20,6 +20,8 @@ class User(Base):
     sessions: Mapped[list["SessionToken"]] = relationship(back_populates="user")
     histories: Mapped[list["QuestionHistory"]] = relationship(back_populates="user")
     conversations: Mapped[list["ChatConversation"]] = relationship(back_populates="user")
+    favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    notes: Mapped[list["UserNote"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class SessionToken(Base):
@@ -129,6 +131,30 @@ class QuestionHistory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped[User] = relationship(back_populates="histories")
+
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    history_id: Mapped[int] = mapped_column(ForeignKey("question_history.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User] = relationship(back_populates="favorites")
+
+
+class UserNote(Base):
+    __tablename__ = "user_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    history_id: Mapped[int] = mapped_column(ForeignKey("question_history.id"), index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped[User] = relationship(back_populates="notes")
 
 
 class SystemConfig(Base):

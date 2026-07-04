@@ -239,3 +239,28 @@ class SystemStats(BaseModel):
     text_chunks: int
     llm_configured: bool
     pdf_available: bool
+
+
+class FavoriteOut(BaseModel):
+    id: int
+    history_id: int
+    created_at: datetime
+
+
+class UserNoteOut(BaseModel):
+    id: int
+    history_id: int
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChunkDetailOut(BaseModel):
+    id: int
+    chunk_id: str
+    chapter: str
+    section: str
+    pdf_page: int
+    source_file: str
+    text: str
+    embedding_model: str

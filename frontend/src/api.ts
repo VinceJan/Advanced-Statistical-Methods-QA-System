@@ -67,6 +67,13 @@ export const api = {
   deleteQaPair: (token: string, id: number) => request<{ message: string }>(`/api/qa-pairs/${id}`, { method: "DELETE" }, token),
   history: (token: string) => request<HistoryItem[]>("/api/history", {}, token),
   clearHistory: (token: string) => request<{ message: string }>("/api/history", { method: "DELETE" }, token),
+  toggleFavorite: (token: string, historyId: number) =>
+    request<{ favorited: boolean }>(`/api/history/${historyId}/favorite`, { method: "POST" }, token),
+  favorites: (token: string) => request<{ id: number; history_id: number; created_at: string }[]>("/api/history/favorites", {}, token),
+  saveNote: (token: string, historyId: number, content: string) =>
+    request<{ id: number; history_id: number; content: string; created_at: string; updated_at: string }>(`/api/history/${historyId}/notes`, { method: "POST", body: JSON.stringify({ content }) }, token),
+  getNote: (token: string, historyId: number) =>
+    request<{ id: number; history_id: number; content: string; created_at: string; updated_at: string } | null>(`/api/history/${historyId}/notes`, {}, token),
   adminUsers: (token: string) => request<UserRecord[]>("/api/admin/users", {}, token),
   updateUserRole: (token: string, userId: number, role: "admin" | "student") =>
     request<UserRecord>(`/api/admin/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }, token),
@@ -91,6 +98,8 @@ export const api = {
   deleteConcept: (token: string, id: number) => request<{ message: string }>(`/api/admin/concepts/${id}`, { method: "DELETE" }, token),
   adminChunks: (token: string, q = "") =>
     request<TextChunk[]>(`/api/admin/chunks${q ? `?q=${encodeURIComponent(q)}` : ""}`, {}, token),
+  adminChunkDetail: (token: string, chunkId: string) =>
+    request<TextChunk>(`/api/admin/chunks/${encodeURIComponent(chunkId)}`, {}, token),
   rebuildChunks: (token: string) => request<{ text_chunks: number }>("/api/admin/chunks/rebuild", { method: "POST" }, token),
   adminHistories: (token: string) => request<HistoryItem[]>("/api/admin/histories", {}, token)
 };

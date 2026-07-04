@@ -299,3 +299,20 @@ def list_all_histories(db: Session = Depends(get_db), _: User = Depends(require_
 
 def admin_count(db: Session) -> int:
     return db.query(User).filter(User.role == "admin").count()
+
+
+@router.get("/chunks/{chunk_id}", response_model=TextChunkOut)
+def get_chunk_detail(chunk_id: str, db: Session = Depends(get_db), _: User = Depends(require_admin)) -> TextChunkOut:
+    chunk = db.query(TextChunk).filter(TextChunk.chunk_id == chunk_id).first()
+    if not chunk:
+        raise HTTPException(status_code=404, detail="文本块不存在")
+    return TextChunkOut(
+        id=chunk.id,
+        chunk_id=chunk.chunk_id,
+        chapter=chunk.chapter,
+        section=chunk.section,
+        pdf_page=chunk.pdf_page,
+        source_file=chunk.source_file,
+        preview=chunk.text,
+        embedding_model=chunk.embedding_model,
+    )

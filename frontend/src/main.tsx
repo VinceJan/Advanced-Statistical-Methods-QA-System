@@ -9,6 +9,8 @@ import "katex/dist/katex.min.css";
 import {
   BookOpen,
   Brain,
+  ChevronDown,
+  ChevronUp,
   CircleUserRound,
   Clock3,
   Database,
@@ -24,10 +26,89 @@ import {
   ShieldCheck,
   Trash2,
   UserX,
-  Wrench
+  Wrench,
+  X
 } from "lucide-react";
 import { api, ApiError } from "./api";
 import type { AskResponse, ChatConversation, ChatMessage, Concept, Graph, GraphEdge, HistoryItem, LlmConfig, QAPair, SystemStats, TextChunk, UserRecord } from "./types";
+
+/* ── 来源原文模态框 ── */
+function SourceModal({ chunkId, token, onClose }: { chunkId: string; token: string; onClose: () => void }) {
+  const [chunk, setChunk] = useState<TextChunk | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.adminChunkDetail(token, chunkId)
+      .then((data) => { if (!cancelled) setChunk(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "加载失败"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [chunkId, token]);
+
+  return (
+    <div className="modalOverlay" onClick={onClose}>
+      <div className="modalContent" onClick={(e) => e.stopPropagation()}>
+        <div className="modalHeader">
+          <h3>来源原文</h3>
+          <button className="iconBtn" onClick={onClose} title="关闭"><X size={18} /></button>
+        </div>
+        {loading && <div className="emptyState small">加载中...</div>}
+        {error && <p className="error">{error}</p>}
+        {chunk && (
+          <div className="modalBody">
+            <div className="sourceMeta">
+              <span className="tag">{chunk.chapter}</span>
+              {chunk.section && <span className="tag muted">{chunk.section}</span>}
+              <span className="tag muted">PDF 第 {chunk.pdf_page} 页</span>
+            </div>
+            <div className="sourceFullText">
+              {chunk.preview}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── 可展开来源卡片 ── */
+function SourceCard({ source, token, index }: { source: AskResponse["sources"][number]; token: string; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  return (
+    <>
+      <details className="sourceCard" open={index === 0}>
+        <summary>
+          <div className="sourceCardHeader">
+            <strong>{source.chapter}</strong>
+            <span>PDF 第 {source.pdf_page} 页 · 相关度 {source.score}</span>
+          </div>
+          <div className="sourceCardActions">
+            <button
+              className="textBtn"
+              onClick={(e) => { e.preventDefault(); setExpanded((v) => !v); }}
+              title={expanded ? "收起" : "展开"}
+            >
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {expanded ? "收起" : "展开"}
+            </button>
+            <button className="textBtn" onClick={(e) => { e.preventDefault(); setShowModal(true); }}>
+              查看完整原文
+            </button>
+          </div>
+        </summary>
+        <div className={`sourceCardBody ${expanded ? "open" : ""}`}>
+          <p>{source.summary || source.snippet}</p>
+        </div>
+      </details>
+      {showModal && <SourceModal chunkId={source.chunk_id} token={token} onClose={() => setShowModal(false)} />}
+    </>
+  );
+}
 import "./styles.css";
 
 type Tab = "ask" | "manage" | "graph" | "history" | "admin";
@@ -288,13 +369,7 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
               <h3>来源</h3>
               <div className="sourceList">
                 {activeAssistant.sources.map((source, index) => (
-                  <details key={source.chunk_id} open={index === 0}>
-                    <summary>
-                      <strong>{source.chapter}</strong>
-                      <span>PDF 第 {source.pdf_page} 页 · 相关度 {source.score}</span>
-                    </summary>
-                    <p>{source.summary || source.snippet}</p>
-                  </details>
+                  <SourceCard key={source.chunk_id} source={source} token={token} index={index} />
                 ))}
               </div>
               {activeAssistant.related_questions.length > 0 && <h3>相关问题</h3>}
@@ -525,8 +600,10 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
                 {selected.sources.map((source, index) => (
                   <details key={`${String(source["chunk_id"] || "source")}-${index}`} open={index === 0}>
                     <summary>
-                      <strong>{String(source["chapter"] || "教材来源")}</strong>
-                      <span>PDF 第 {String(source["pdf_page"] || "-")} 页</span>
+                      <div className="sourceCardHeader">
+                        <strong>{String(source["chapter"] || "教材来源")}</strong>
+                        <span>PDF 第 {String(source["pdf_page"] || "-")} 页</span>
+                      </div>
                     </summary>
                     <p>{String(source["summary"] || source["snippet"] || "")}</p>
                   </details>
