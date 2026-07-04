@@ -1,7 +1,5 @@
 # 高级统计方法知识图谱智能问答系统
 
-> ✅ 已配置 GitHub Actions 自动部署到 VPS
-
 题目二课程项目成品实现。系统以 `ISLRv2_corrected_June_2023.pdf` 为主语料，提供中文多轮问答、教材 RAG 来源引用、知识图谱子图、问题推荐、用户登录、学习历史、管理员后台和可复现实验验证。
 
 当前版本既支持本地演示，也已提供 Docker Compose 部署文件，可部署到 VPS。真实 API Key 只应放在本地或服务器 `.env` 中，不要写入代码、文档、报告或提交记录。
@@ -195,7 +193,22 @@ docs/qa-screenshots/
 https://aistudyassistant.bluesclawd.dev
 ```
 
-完整部署和运维命令见 `docs/部署方案.md`。生产注意事项：必须更换管理员密码、通过服务器环境变量注入 API Key、持久化 Docker volume 中的数据库、使用 HTTPS 反代。
+### 自动部署（推荐）
+
+本项目已配置 GitHub Actions 自动部署。每次 `git push` 到 `main` 分支时，会自动：
+
+1. 打包项目代码
+2. 通过 SSH 上传到 VPS
+3. 停止旧容器、备份旧版本
+4. 解压新版本、恢复 `.env`
+5. 构建并启动新容器
+6. 执行健康检查
+
+配置方法见 `docs/部署方案.md`。
+
+### 手动部署
+
+如需手动部署，完整命令见 `docs/运维手册.md`。生产注意事项：必须更换管理员密码、通过服务器环境变量注入 API Key、持久化 Docker volume 中的数据库、使用 HTTPS 反代。
 
 ## 相关文档
 
