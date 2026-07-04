@@ -1,0 +1,52 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Add VPS host key to known_hosts to prevent MITM attacks
+          echo "165.232.60.232 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH9JfNRKqO1sAflK6YkHSvL09QvIcuar5pqFEGX4EEQ7" >> ~/.ssh/known_hosts
+          echo "165.232.60.232 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDNHQLkuwYBv/vBRwyM5+vCQWx9f5BG3dHvFBkalYaDiXj6lBEKoMZ+chdXnTiNwXvIXk0tKr17dmQ3juRnw+3ZcYDrxrjZ495YCefO0bdCZlYGlmVvaXY7/+HqipmJdJ1q+CyDqEV47dkptArkK9sTt2t3E4AoM2XFuTyUUmPwjkgGADl2i2uTrtOu2QLJdrCNdYRKz0xU/whNjCx+871VzK4qAeeJXkpNVaRCFlBFCfwhmNgH4e/v5m00uvw96VplLge+X6yCJDevKH+BtFYI90/OOqMneZr4YToDTUB9BXz4mCrrueOZsO7gYZ7ny8+d9Pxnw5lFW0JUdr6cRf7ultLlOqI6brRb19ygm5NWP+dw6P1wD/7baKzhS2J+cdmG841NPmkAR4Font5Df/rtumOeuy1zPk+hT6E26P0CtnC+FiAvNX8NqnHNGp2rI+bOrqyxwU91i+YAyIrQBgvHAU1y4e220HiH6YPZnOT/W6Y8QE00TPXUIh5+pdq9jlU=" >> ~/.ssh/known_hosts
+          echo "165.232.60.232 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBFWaSv46xPaztzoS/dWokVeFZDkCkywGE/ef24lVOnmoNQ0m1VNEE1JpO8y+PyDMOl4mzbhIUyhD6c89QtkmUdc=" >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes root@165.232.60.232 << 'EOF'
+            set -e
+            echo "=== 开始部署 ==="
+            cd /opt/advanced-stat-qa/app
+
+            echo "=== 拉取最新代码 ==="
+            git pull origin main
+
+            echo "=== 构建并启动容器 ==="
+            docker compose -p advanced-stat-qa -f docker-compose.server.yml up -d --build
+
+            echo "=== 等待服务启动 ==="
+            sleep 5
+
+            echo "=== 部署完成 ==="
+          EOF
+
+      - name: Health check
+        run: |
+          echo "=== 等待服务完全启动 ==="
+          sleep 10
+          echo "=== 检查服务健康状态 ==="
+          curl -fsS https://aistudyassistant.bluesclawd.dev/api/health
+          echo ""
+          curl -fsS https://aistudyassistant.bluesclawd.dev/api/system/stats
+          echo ""
+          echo "=== 部署成功！==="
