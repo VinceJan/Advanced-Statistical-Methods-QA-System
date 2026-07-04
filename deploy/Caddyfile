@@ -1,6 +1,20 @@
 {$SITE_DOMAIN:aistudyassistant.bluesclawd.dev} {
     encode gzip zstd
 
-    reverse_proxy /api/* backend:8000
+    # 静态资源长期缓存（带 hash 的 Vite 产物）
+    @assets path /assets/*
+    header @assets Cache-Control "public, immutable, max-age=31536000"
+
+    # API 反代到后端，LLM 调用可能耗时较长，设置足够超时
+    reverse_proxy /api/* backend:8000 {
+        transport http {
+            read_timeout 60s
+            write_timeout 60s
+            dial_timeout 5s
+        }
+        flush_interval -1
+    }
+
+    # 前端静态资源
     reverse_proxy frontend:80
 }

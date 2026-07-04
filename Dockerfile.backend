@@ -19,4 +19,7 @@ COPY ISLRv2_corrected_June_2023.pdf /app/ISLRv2_corrected_June_2023.pdf
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 单进程 + asyncio 已足够处理 IO 密集型（LLM 调用）的并发
+# --limit-concurrency 限制同时处理的请求数，防止弱 VPS 内存暴涨
+# --timeout-keepalive 避免空闲连接占用资源
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--limit-concurrency", "30", "--timeout-keep-alive", "30"]

@@ -12,6 +12,11 @@ from .models import ChatMessage
 from .schemas import SourceOut
 
 
+# 限制同时进行的 LLM 调用数量，防止弱 VPS 内存暴涨
+import asyncio
+_LLM_SEMAPHORE = asyncio.Semaphore(5)
+
+
 @dataclass(frozen=True)
 class AnswerResult:
     content: str
@@ -51,17 +56,18 @@ class LLMClient:
             "thinking": {"type": "disabled"},
         }
         headers = {"Authorization": f"Bearer {self.api_key()}", "Content-Type": "application/json"}
-        try:
-            async with httpx.AsyncClient(timeout=45) as client:
-                response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-                data = response.json()
-            content = data["choices"][0]["message"].get("content", "")
-            content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-            return AnswerResult(content or self.local_answer(question, evidence, graph_notes), "minimax")
-        except Exception as exc:
-            fallback = self.local_answer(question, evidence, graph_notes)
-            return AnswerResult(fallback, "local_fallback", type(exc).__name__)
+        async with _LLM_SEMAPHORE:
+            try:
+                async with httpx.AsyncClient(timeout=45) as client:
+                    response = await client.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                content = data["choices"][0]["message"].get("content", "")
+                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+                return AnswerResult(content or self.local_answer(question, evidence, graph_notes), "minimax")
+            except Exception as exc:
+                fallback = self.local_answer(question, evidence, graph_notes)
+                return AnswerResult(fallback, "local_fallback", type(exc).__name__)
 
     def local_answer(self, question: str, evidence: list[SourceOut], graph_notes: list[str]) -> str:
         joined_context = f"{question} {' '.join(graph_notes)}".lower()

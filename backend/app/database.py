@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Generator
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .settings import DATA_DIR, settings
@@ -22,7 +22,19 @@ def configure_database(database_url: str | None = None) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     url = database_url or settings.database_url
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    engine = create_engine(url, connect_args=connect_args)
+    engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
+
+    # SQLite 并发优化：WAL 模式允许读写并发，busy_timeout 避免写锁冲突时立即报错
+    if url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA cache_size=-8192")
+            cursor.close()
+
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

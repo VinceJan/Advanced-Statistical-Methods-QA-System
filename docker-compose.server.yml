@@ -14,6 +14,9 @@ services:
     volumes:
       - app_data:/app/data
     restart: unless-stopped
+    # 弱 VPS 资源限制，防止 OOM 拖垮整机
+    mem_limit: 512m
+    memswap_limit: 512m
 
   frontend:
     build:
@@ -22,6 +25,8 @@ services:
     ports:
       - "127.0.0.1:18080:80"
     restart: unless-stopped
+    mem_limit: 64m
+    memswap_limit: 64m
 
 volumes:
   app_data:
