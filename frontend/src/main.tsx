@@ -262,6 +262,8 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
   const [sidebarQuery, setSidebarQuery] = useState("");
   const [favorites, setFavorites] = useState<HistoryItem[]>([]);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [showFullThread, setShowFullThread] = useState(false);
+  const [favoritedIds, setFavoritedIds] = useState<Set<number>>(new Set());
 
   function toggleSidebar() {
     setSidebarCollapsed((prev) => {
@@ -279,9 +281,44 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
 
   async function loadFavorites() {
     try {
-      setFavorites(await api.favorites(token));
+      const data = await api.favorites(token);
+      setFavorites(data);
+      setFavoritedIds(new Set(data.map((f) => f.message_id).filter((id): id is number => id != null)));
     } catch (err) {
       setToast(err instanceof Error ? err.message : "加载收藏失败");
+    }
+  }
+
+  async function toggleMessageFavorite(message: ChatMessage, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      // 找到 message 对应的 history record（按 created_at 匹配）
+      const result = await fetchHistoryIdForMessage(message);
+      if (result == null) {
+        setToast("该消息没有可收藏的历史记录");
+        return;
+      }
+      const res = await api.toggleFavorite(token, result);
+      setFavoritedIds((prev) => {
+        const next = new Set(prev);
+        if (res.favorited) next.add(message.id);
+        else next.delete(message.id);
+        return next;
+      });
+      setToast(res.favorited ? "已加入收藏" : "已取消收藏");
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "收藏操作失败");
+    }
+  }
+
+  // 根据 message 找到对应的 history id（用于 favorite API）
+  async function fetchHistoryIdForMessage(message: ChatMessage): Promise<number | null> {
+    try {
+      const items = await api.history(token);
+      const match = items.find((item) => item.message_id === message.id);
+      return match?.id ?? null;
+    } catch {
+      return null;
     }
   }
 
@@ -294,6 +331,7 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
       setActiveMessageId(lastAssistant?.id ?? null);
       if (refreshList) setConversations(await api.conversations(token));
       setShowFavorites(false);
+      setShowFullThread(false);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "打开会话失败");
     }
@@ -312,6 +350,7 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
         [...detail.messages].reverse().find((m) => m.role === "assistant");
       setActiveMessageId(target?.id ?? null);
       setShowFavorites(false);
+      setShowFullThread(false);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "打开收藏失败");
     }
@@ -448,31 +487,107 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
             </button>
           )}
 
-          {/* 对话消息流（ChatGPT 风格核心区域） */}
-          <section className="messageThread">
-            {messages.length === 0 && (
-              <div className="emptyState">
-                开始提问后，这里会保留当前会话的上下文。<br />
-                <small style={{ marginTop: 8, display: "inline-block", color: "var(--muted)" }}>
-                  支持连续追问；每轮回答会独立刷新来源、推荐问题和知识图谱。
-                </small>
-              </div>
-            )}
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`chatBubble ${message.role} ${message.id === activeMessageId ? "active" : ""}`}
-                onClick={() => message.role === "assistant" && setActiveMessageId(message.id)}
-              >
-                <header>
-                  <strong>{message.role === "user" ? "你" : "助教"}</strong>
-                  <time>{new Date(message.created_at).toLocaleTimeString()}</time>
-                </header>
-                {message.role === "assistant" ? <MarkdownBlock content={message.content} /> : <p>{message.content}</p>}
-                {message.role === "assistant" && <PerformanceStrip message={message} />}
-              </article>
-            ))}
-          </section>
+          {/* 对话消息流：默认只显示最近一轮（用户问 + AI 简短回答），展开后显示全部 */}
+          {(() => {
+            const lastUserIndex = [...messages].map((m, i) => ({ m, i })).reverse().find((x) => x.m.role === "user")?.i ?? -1;
+            const lastAssistantIndex = [...messages].map((m, i) => ({ m, i })).reverse().find((x) => x.m.role === "assistant")?.i ?? -1;
+            const lastRoundStart = Math.min(
+              lastUserIndex >= 0 ? lastUserIndex : Infinity,
+              lastAssistantIndex >= 0 ? lastAssistantIndex : Infinity
+            );
+            const visibleMessages = showFullThread || messages.length <= 2
+              ? messages
+              : messages.slice(lastRoundStart);
+            const hasMore = messages.length > visibleMessages.length;
+            return (
+              <section className="messageThread compact">
+                {messages.length === 0 && (
+                  <div className="emptyState small">
+                    开始提问后，会显示最近的问答。
+                  </div>
+                )}
+                {visibleMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    className={`chatBubble ${message.role} ${message.id === activeMessageId ? "active" : ""}`}
+                    onClick={() => message.role === "assistant" && setActiveMessageId(message.id)}
+                  >
+                    <header>
+                      <strong>{message.role === "user" ? "你" : "助教"}</strong>
+                      <div className="chatBubbleMeta">
+                        <time>{new Date(message.created_at).toLocaleTimeString()}</time>
+                        {message.role === "assistant" && (
+                          <button
+                            className={`favoriteBtn small ${favoritedIds.has(message.id) ? "favorited" : ""}`}
+                            onClick={(e) => toggleMessageFavorite(message, e)}
+                            title={favoritedIds.has(message.id) ? "取消收藏" : "收藏这条回答"}
+                            aria-label={favoritedIds.has(message.id) ? "取消收藏" : "收藏这条回答"}
+                          >
+                            <Heart size={14} fill={favoritedIds.has(message.id) ? "currentColor" : "none"} />
+                          </button>
+                        )}
+                      </div>
+                    </header>
+                    {message.role === "user" ? (
+                      <p>{message.content}</p>
+                    ) : (
+                      <>
+                        <MessagePreview content={message.content} />
+                        {message.id === activeMessageId && <PerformanceStrip message={message} />}
+                      </>
+                    )}
+                  </article>
+                ))}
+                {hasMore && (
+                  <button className="textBtn threadToggle" onClick={() => setShowFullThread((v) => !v)}>
+                    {showFullThread ? (
+                      <><ChevronUp size={14} />收起历史对话（共 {messages.length} 条）</>
+                    ) : (
+                      <><ChevronDown size={14} />展开完整对话（共 {messages.length} 条）</>
+                    )}
+                  </button>
+                )}
+              </section>
+            );
+          })()}
+
+          {/* 当前轮次详情：来源、图谱、推荐问题（核心展示区） */}
+          {activeAssistant && (
+            <div className={`answerShell ${!canShowEvidence ? "single" : ""}`}>
+              <section className="answerPanel">
+                <div className="panelHeader">
+                  <h3>当前轮次详情</h3>
+                  <StatusBadge result={activeAssistant} />
+                </div>
+                <MarkdownBlock content={activeAssistant.content} />
+                {activeAssistant.status === "llm_error" && (
+                  <p className="warning">外部 LLM 调用失败，当前展示本地证据降级回答。</p>
+                )}
+              </section>
+              {canShowEvidence && (
+                <section className="sidePanel">
+                  <h3>来源</h3>
+                  <div className="sourceList">
+                    {activeAssistant.sources.map((source, index) => (
+                      <SourceCard key={source.chunk_id} source={source} token={token} index={index} />
+                    ))}
+                  </div>
+                  {activeAssistant.related_questions.length > 0 && <h3>相关问题</h3>}
+                  <div className="stackButtons">
+                    {activeAssistant.related_questions.map((item) => (
+                      <button key={item} onClick={() => ask(item)}>{item}</button>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {canShowEvidence && activeAssistant.graph.nodes.length > 0 && (
+                <section className="graphPanel widePanel">
+                  <h3>关联知识图谱子图</h3>
+                  <GraphCanvas graph={activeAssistant.graph} />
+                </section>
+              )}
+            </div>
+          )}
 
           {/* 当前轮次详情：来源、图谱、推荐问题 */}
           {activeAssistant && (
@@ -646,6 +761,19 @@ function MarkdownBlock({ content }: { content: string }) {
   return <div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{content}</ReactMarkdown></div>;
 }
 
+/* ── 消息流中的 AI 回答预览：去 Markdown 格式、截前 200 字 ── */
+function MessagePreview({ content }: { content: string }) {
+  const stripped = content
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/^#+\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\n+/g, " ")
+    .trim();
+  const truncated = stripped.length > 200 ? stripped.slice(0, 200) + "…" : stripped;
+  return <p className="messagePreview">{truncated || "(无内容)"}</p>;
+}
+
 function QAManager({ token, setToast }: { token: string; setToast: (value: string) => void }) {
   const [pairs, setPairs] = useState<QAPair[]>([]);
   const [query, setQuery] = useState("");
@@ -794,16 +922,18 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
   const [noteLoaded, setNoteLoaded] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"favorites" | "all">("favorites");
 
   async function load() {
     try {
-      setItems(await api.favorites(token));
+      const data = tab === "favorites" ? await api.favorites(token) : await api.history(token);
+      setItems(data);
     } catch (err) {
-      setToast(err instanceof Error ? err.message : "加载收藏失败");
+      setToast(err instanceof Error ? err.message : "加载历史失败");
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [tab]);
 
   // 选中条目时加载对应笔记
   useEffect(() => {
@@ -841,10 +971,36 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
     e.stopPropagation();
     try {
       await api.toggleFavorite(token, item.id);
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      if (tab === "favorites") {
+        setItems((prev) => prev.filter((i) => i.id !== item.id));
+      } else {
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorited: false } : i)));
+      }
       if (selected?.id === item.id) setSelected(null);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "取消收藏失败");
+    }
+  }
+
+  async function favorite(item: HistoryItem, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      const res = await api.toggleFavorite(token, item.id);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorited: res.favorited } : i)));
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "收藏失败");
+    }
+  }
+
+  async function clearAll() {
+    if (!confirm("确认清空所有历史？此操作不可恢复。")) return;
+    try {
+      await api.clearHistory(token);
+      setSelected(null);
+      await load();
+      setToast("已清空历史");
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "清空失败");
     }
   }
 
@@ -859,22 +1015,37 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
       <section className="topBand">
         <div>
           <h2>我的笔记</h2>
-          <p>收藏的回答会自动汇总到这里，可以为每条回答添加学习笔记。所有数据仅自己可见。</p>
+          <p>{tab === "favorites" ? "查看收藏的回答并编辑学习笔记。" : "查看所有历史提问，可一键收藏感兴趣的条目。"}</p>
         </div>
-        <div className="searchInput" style={{ maxWidth: 280 }}>
-          <Search size={16} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索收藏"
-          />
+        <div className="row">
+          <div className="segmented">
+            <button className={tab === "favorites" ? "active" : ""} onClick={() => setTab("favorites")}>
+              <Heart size={14} />收藏
+            </button>
+            <button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>
+              <Clock3 size={14} />全部历史
+            </button>
+          </div>
+          {tab === "all" && (
+            <button className="danger" onClick={clearAll}><Trash2 size={17} />清空</button>
+          )}
+          <div className="searchInput" style={{ maxWidth: 220 }}>
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={tab === "favorites" ? "搜索收藏" : "搜索历史"}
+            />
+          </div>
         </div>
       </section>
       <section className="historyLayout">
         <div className="historyList">
           {filtered.length === 0 && (
             <div className="emptyState small">
-              {items.length === 0 ? "还没有收藏任何回答。在问答页点击回答旁的爱心即可收藏。" : "没有匹配的收藏"}
+              {items.length === 0
+                ? (tab === "favorites" ? "还没有收藏任何回答。在问答页点击回答旁的爱心即可收藏。" : "还没有任何提问记录。")
+                : "没有匹配的记录"}
             </div>
           )}
           {filtered.map((item) => (
@@ -886,11 +1057,11 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
               <div className="historyActions">
                 <time>{new Date(item.created_at).toLocaleString()}</time>
                 <button
-                  className="favoriteBtn favorited"
-                  onClick={(e) => unfavorite(item, e)}
-                  title="取消收藏"
+                  className={`favoriteBtn ${item.favorited ? "favorited" : ""}`}
+                  onClick={(e) => (item.favorited ? unfavorite(item, e) : favorite(item, e))}
+                  title={item.favorited ? "取消收藏" : "收藏"}
                 >
-                  <Heart size={16} fill="currentColor" />
+                  <Heart size={16} fill={item.favorited ? "currentColor" : "none"} />
                 </button>
               </div>
               <h3>{item.question}</h3>
@@ -899,7 +1070,11 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
           ))}
         </div>
         <aside className="historyDetail">
-          {!selected && <div className="emptyState">选择一条收藏查看完整回答并编辑笔记。</div>}
+          {!selected && (
+            <div className="emptyState">
+              {tab === "favorites" ? "选择一条收藏查看完整回答并编辑笔记。" : "选择一条历史查看完整回答。"}
+            </div>
+          )}
           {selected && (
             <>
               <time>{new Date(selected.created_at).toLocaleString()}</time>
@@ -919,26 +1094,30 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
                   </details>
                 ))}
               </div>
-              <h3>我的笔记</h3>
-              {noteLoaded ? (
+              {tab === "favorites" && (
                 <>
-                  <textarea
-                    className="noteEditor"
-                    value={noteContent}
-                    onChange={(e) => setNoteContent(e.target.value)}
-                    placeholder="写下你的学习心得、疑问或延伸思考…"
-                  />
-                  <div className="row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
-                    <span style={{ color: "var(--muted)", fontSize: 12, marginRight: "auto" }}>
-                      {noteContent.length} 字
-                    </span>
-                    <button className="primary" onClick={saveNote} disabled={noteSaving}>
-                      {noteSaving ? "保存中" : "保存笔记"}
-                    </button>
-                  </div>
+                  <h3>我的笔记</h3>
+                  {noteLoaded ? (
+                    <>
+                      <textarea
+                        className="noteEditor"
+                        value={noteContent}
+                        onChange={(e) => setNoteContent(e.target.value)}
+                        placeholder="写下你的学习心得、疑问或延伸思考…"
+                      />
+                      <div className="row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
+                        <span style={{ color: "var(--muted)", fontSize: 12, marginRight: "auto" }}>
+                          {noteContent.length} 字
+                        </span>
+                        <button className="primary" onClick={saveNote} disabled={noteSaving}>
+                          {noteSaving ? "保存中" : "保存笔记"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="emptyState small">加载笔记中…</div>
+                  )}
                 </>
-              ) : (
-                <div className="emptyState small">加载笔记中…</div>
               )}
             </>
           )}

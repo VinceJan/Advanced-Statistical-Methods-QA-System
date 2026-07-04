@@ -492,6 +492,58 @@ h3 { margin: 0 0 12px; font-size: 17px; }
   border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(22,113,139,.12);
 }
+
+/* ── 消息流紧凑模式 + 预览 + 气泡元信息 ── */
+.messageThread.compact {
+  max-height: none;
+  min-height: 0;
+  padding: 12px 16px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  gap: 10px;
+}
+.messagePreview {
+  margin: 0;
+  color: #526276;
+  line-height: 1.62;
+  font-size: 14px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.chatBubbleMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.favoriteBtn.small {
+  width: 26px;
+  height: 26px;
+  color: var(--muted);
+}
+.favoriteBtn.small:hover {
+  background: var(--soft);
+  color: var(--danger);
+}
+.favoriteBtn.small.favorited {
+  color: var(--danger);
+}
+.threadToggle {
+  align-self: center;
+  padding: 4px 10px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--brandDark);
+  font-size: 13px;
+  min-height: 28px;
+}
+.threadToggle:hover {
+  background: #eaf6f8;
+  text-decoration: none;
+}
 .qaList h3, .historyList h3 { margin: 10px 0 8px; }
 .qaList footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
