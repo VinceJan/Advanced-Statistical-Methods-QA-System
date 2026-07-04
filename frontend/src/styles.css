@@ -188,8 +188,8 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
 .askSidebar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: 8px;
+  padding: 12px;
   border-right: 1px solid var(--line);
   background: #f8fbfc;
   min-width: 0;
@@ -217,8 +217,9 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 4px;
   padding-right: 2px;
+  margin-top: 2px;
 }
 .sidebarGroup {
   display: flex;
@@ -229,7 +230,7 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
-  padding: 6px 8px 4px;
+  padding: 4px 8px 2px;
   letter-spacing: 0.02em;
 }
 .sidebarConvItem {
