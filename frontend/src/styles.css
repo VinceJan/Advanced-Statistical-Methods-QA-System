@@ -544,6 +544,35 @@ h3 { margin: 0 0 12px; font-size: 17px; }
   background: #eaf6f8;
   text-decoration: none;
 }
+
+/* ── 详情区头部右侧（收藏按钮 + 状态徽章）── */
+.panelHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.favoriteBtnInline {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.favoriteBtnInline:hover {
+  color: var(--danger);
+  border-color: #efc7c2;
+  background: #fff5f5;
+}
+.favoriteBtnInline.favorited {
+  color: var(--danger);
+  border-color: #efc7c2;
+  background: #fff5f5;
+}
 .qaList h3, .historyList h3 { margin: 10px 0 8px; }
 .qaList footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 

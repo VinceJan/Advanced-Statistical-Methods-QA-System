@@ -292,7 +292,6 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
   async function toggleMessageFavorite(message: ChatMessage, e: React.MouseEvent) {
     e.stopPropagation();
     try {
-      // 找到 message 对应的 history record（按 created_at 匹配）
       const result = await fetchHistoryIdForMessage(message);
       if (result == null) {
         setToast("该消息没有可收藏的历史记录");
@@ -305,23 +304,37 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
         else next.delete(message.id);
         return next;
       });
+      // 实时同步侧栏收藏夹列表：取消时立即移除，新增时刷新整个列表（数量小，开销可忽略）
+      if (res.favorited) {
+        // 新增：刷新收藏夹（拿完整 HistoryItem 包含 question/answer 等）
+        loadFavorites();
+      } else {
+        // 取消：直接从 state 移除（按 message_id 匹配）
+        setFavorites((prev) => prev.filter((f) => f.message_id !== message.id));
+      }
       setToast(res.favorited ? "已加入收藏" : "已取消收藏");
     } catch (err) {
       setToast(err instanceof Error ? err.message : "收藏操作失败");
     }
   }
 
-  // 根据 message 找到对应的 history id（用于 favorite API）
+  // 缓存 history 列表，避免每次收藏都全量拉
+  const historyCacheRef = useRef<{ items: HistoryItem[]; fetchedAt: number } | null>(null);
   async function fetchHistoryIdForMessage(message: ChatMessage): Promise<number | null> {
     try {
-      const items = await api.history(token);
-      const match = items.find((item) => item.message_id === message.id);
+      const now = Date.now();
+      if (!historyCacheRef.current || now - historyCacheRef.current.fetchedAt > 30000) {
+        const items = await api.history(token);
+        historyCacheRef.current = { items, fetchedAt: now };
+      }
+      const match = historyCacheRef.current.items.find((item) => item.message_id === message.id);
       return match?.id ?? null;
     } catch {
       return null;
     }
   }
 
+  // 打开会话时刷新缓存
   async function openConversation(id: number, refreshList = true) {
     try {
       const detail = await api.conversation(token, id);
@@ -332,6 +345,8 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
       if (refreshList) setConversations(await api.conversations(token));
       setShowFavorites(false);
       setShowFullThread(false);
+      // 切换会话时清缓存，避免切换后 history 列表过期
+      historyCacheRef.current = null;
     } catch (err) {
       setToast(err instanceof Error ? err.message : "打开会话失败");
     }
@@ -487,63 +502,48 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
             </button>
           )}
 
-          {/* 对话消息流：默认只显示最近一轮（用户问 + AI 简短回答），展开后显示全部 */}
+          {/* 对话消息流：只显示用户提问序列，AI 完整回答在下方详情区 */}
           {(() => {
-            const lastUserIndex = [...messages].map((m, i) => ({ m, i })).reverse().find((x) => x.m.role === "user")?.i ?? -1;
-            const lastAssistantIndex = [...messages].map((m, i) => ({ m, i })).reverse().find((x) => x.m.role === "assistant")?.i ?? -1;
-            const lastRoundStart = Math.min(
-              lastUserIndex >= 0 ? lastUserIndex : Infinity,
-              lastAssistantIndex >= 0 ? lastAssistantIndex : Infinity
-            );
-            const visibleMessages = showFullThread || messages.length <= 2
-              ? messages
-              : messages.slice(lastRoundStart);
-            const hasMore = messages.length > visibleMessages.length;
+            const userMessages = messages.filter((m) => m.role === "user");
+            const lastUserIndex = userMessages.length > 0 ? messages.lastIndexOf(userMessages[userMessages.length - 1]) : -1;
+            const defaultVisibleCount = userMessages.length <= 1 ? userMessages.length : 1;
+            const visibleUsers = showFullThread
+              ? userMessages
+              : userMessages.slice(-defaultVisibleCount);
+            const hiddenCount = userMessages.length - visibleUsers.length;
             return (
               <section className="messageThread compact">
-                {messages.length === 0 && (
+                {userMessages.length === 0 && (
                   <div className="emptyState small">
-                    开始提问后，会显示最近的问答。
+                    开始提问后，会显示最近的问题。
                   </div>
                 )}
-                {visibleMessages.map((message) => (
+                {visibleUsers.map((message) => (
                   <article
                     key={message.id}
-                    className={`chatBubble ${message.role} ${message.id === activeMessageId ? "active" : ""}`}
-                    onClick={() => message.role === "assistant" && setActiveMessageId(message.id)}
+                    className={`chatBubble user`}
+                    onClick={() => {
+                      // 点击用户问题时，定位到该问题对应的 assistant 回答
+                      const idx = messages.findIndex((m) => m.id === message.id);
+                      if (idx >= 0) {
+                        const nextAssistant = messages.slice(idx).find((m) => m.role === "assistant");
+                        if (nextAssistant) setActiveMessageId(nextAssistant.id);
+                      }
+                    }}
                   >
                     <header>
-                      <strong>{message.role === "user" ? "你" : "助教"}</strong>
-                      <div className="chatBubbleMeta">
-                        <time>{new Date(message.created_at).toLocaleTimeString()}</time>
-                        {message.role === "assistant" && (
-                          <button
-                            className={`favoriteBtn small ${favoritedIds.has(message.id) ? "favorited" : ""}`}
-                            onClick={(e) => toggleMessageFavorite(message, e)}
-                            title={favoritedIds.has(message.id) ? "取消收藏" : "收藏这条回答"}
-                            aria-label={favoritedIds.has(message.id) ? "取消收藏" : "收藏这条回答"}
-                          >
-                            <Heart size={14} fill={favoritedIds.has(message.id) ? "currentColor" : "none"} />
-                          </button>
-                        )}
-                      </div>
+                      <strong>你</strong>
+                      <time>{new Date(message.created_at).toLocaleTimeString()}</time>
                     </header>
-                    {message.role === "user" ? (
-                      <p>{message.content}</p>
-                    ) : (
-                      <>
-                        <MessagePreview content={message.content} />
-                        {message.id === activeMessageId && <PerformanceStrip message={message} />}
-                      </>
-                    )}
+                    <p>{message.content}</p>
                   </article>
                 ))}
-                {hasMore && (
+                {hiddenCount > 0 && (
                   <button className="textBtn threadToggle" onClick={() => setShowFullThread((v) => !v)}>
                     {showFullThread ? (
-                      <><ChevronUp size={14} />收起历史对话（共 {messages.length} 条）</>
+                      <><ChevronUp size={14} />收起历史提问（共 {userMessages.length} 条）</>
                     ) : (
-                      <><ChevronDown size={14} />展开完整对话（共 {messages.length} 条）</>
+                      <><ChevronDown size={14} />展开历史提问（还有 {hiddenCount} 条）</>
                     )}
                   </button>
                 )}
@@ -557,7 +557,17 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
               <section className="answerPanel">
                 <div className="panelHeader">
                   <h3>当前轮次详情</h3>
-                  <StatusBadge result={activeAssistant} />
+                  <div className="panelHeaderRight">
+                    <button
+                      className={`iconBtn favoriteBtnInline ${favoritedIds.has(activeAssistant.id) ? "favorited" : ""}`}
+                      onClick={(e) => toggleMessageFavorite(activeAssistant, e)}
+                      title={favoritedIds.has(activeAssistant.id) ? "取消收藏" : "收藏这条回答"}
+                      aria-label={favoritedIds.has(activeAssistant.id) ? "取消收藏" : "收藏这条回答"}
+                    >
+                      <Heart size={16} fill={favoritedIds.has(activeAssistant.id) ? "currentColor" : "none"} />
+                    </button>
+                    <StatusBadge result={activeAssistant} />
+                  </div>
                 </div>
                 <MarkdownBlock content={activeAssistant.content} />
                 {activeAssistant.status === "llm_error" && (
