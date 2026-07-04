@@ -23,7 +23,7 @@ jobs:
 
       - name: Deploy to VPS
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes root@165.232.60.232 << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p 10628 root@165.232.60.232 << 'EOF'
             set -e
             echo "=== 开始部署 ==="
             cd /opt/advanced-stat-qa/app
