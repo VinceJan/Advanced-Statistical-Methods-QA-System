@@ -1,5 +1,7 @@
 # 高级统计方法知识图谱智能问答系统
 
+> ✅ 已配置 GitHub Actions 自动部署到 VPS
+
 题目二课程项目成品实现。系统以 `ISLRv2_corrected_June_2023.pdf` 为主语料，提供中文多轮问答、教材 RAG 来源引用、知识图谱子图、问题推荐、用户登录、学习历史、管理员后台和可复现实验验证。
 
 当前版本既支持本地演示，也已提供 Docker Compose 部署文件，可部署到 VPS。真实 API Key 只应放在本地或服务器 `.env` 中，不要写入代码、文档、报告或提交记录。
@@ -33,6 +35,10 @@
 │   ├── e2e/visual-smoke.mjs  # Playwright 真实浏览器验收
 │   └── src/
 ├── docs/
+│   ├── README.md             # 文档索引
+│   ├── Agent接手指南.md
+│   ├── 架构与功能说明.md
+│   ├── 运维手册.md
 │   ├── qa-screenshots/       # 验收截图
 │   ├── 部署方案.md
 │   ├── 对抗性审查.md
@@ -42,6 +48,7 @@
 ├── deliverables/             # 答辩 PPT 与演讲稿
 ├── scripts/                  # Windows PowerShell 启动与验证脚本
 ├── deploy/Caddyfile          # Docker Compose 自带 Caddy 入口
+├── docs/project/             # 题目、目标、约束、上下文等过程性材料
 ├── Dockerfile.backend        # 后端镜像
 ├── docker-compose.yml        # 本机或独立服务器 HTTPS Compose
 ├── docker-compose.server.yml # 已有宿主机 Caddy 时使用
@@ -193,6 +200,10 @@ https://aistudyassistant.bluesclawd.dev
 ## 相关文档
 
 - `AGENTS.md`：给后续 AI/开发者的项目规则。
+- `docs/README.md`：文档索引。
+- `docs/Agent接手指南.md`：给后续 Agent 的接手顺序、红线、验证和发布摘要。
+- `docs/架构与功能说明.md`：系统架构、模块职责、数据模型和高风险边界。
+- `docs/运维手册.md`：VPS、Docker、Caddy、备份、发布、回滚和故障排查。
 - `docs/部署方案.md`：服务器和 Docker 部署规划。
 - `docs/对抗性审查.md`：可信度、权限和视觉审查。
 - `docs/完成度评估.md`：当前完成度评分和剩余优化。
