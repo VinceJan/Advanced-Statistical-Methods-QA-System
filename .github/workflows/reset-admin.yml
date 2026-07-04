@@ -1,0 +1,67 @@
+name: 重置线上 admin 密码
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "165.232.60.232 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH9JfNRKqO1sAflK6YkHSvL09QvIcuar5pqFEGX4EEQ7" >> ~/.ssh/known_hosts
+
+      - name: Reset admin password on VPS
+        run: |
+          echo "=== 开始重置线上 admin 密码 ==="
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p 10628 root@165.232.60.232 << 'EOF'
+            set -e
+            cd /opt/advanced-stat-qa/app
+
+            # 获取 backend 容器名
+            BACKEND=$(docker compose -p advanced-stat-qa -f docker-compose.server.yml ps -q backend)
+            if [ -z "$BACKEND" ]; then
+              echo "❌ 找不到 backend 容器"
+              exit 1
+            fi
+
+            # 生成随机密码（不打印到日志）
+            NEW_PASSWORD=$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)
+
+            # 通过环境变量传递密码给容器内 Python（避免出现在进程列表）
+            docker exec -e NEW_PASSWORD="$NEW_PASSWORD" "$BACKEND" python -c "
+            import os, sys
+            sys.path.insert(0, '/app')
+            from backend.app.security import hash_password
+            from backend.app.database import SessionLocal
+            from backend.app.models import User
+            db = SessionLocal()
+            admin = db.query(User).filter(User.username == 'admin').first()
+            if not admin:
+                print('ERROR: admin 用户不存在')
+                sys.exit(1)
+            admin.password_hash = hash_password(os.environ['NEW_PASSWORD'])
+            db.commit()
+            db.close()
+            print('RESET_OK')
+            "
+
+            # 将密码写入只读文件（不打印到日志）
+            echo "$NEW_PASSWORD" > /root/.admin_password
+            chmod 600 /root/.admin_password
+
+            echo "========================================"
+            echo "✅ admin 密码重置成功！"
+            echo "========================================"
+            echo "密码已写入服务器 /root/.admin_password"
+            echo "（出于安全考虑，密码不会显示在此日志中）"
+            echo ""
+            echo "获取密码方法（SSH 到服务器后执行）："
+            echo "  cat /root/.admin_password"
+            echo "========================================"
+            echo ""
+            echo "登录后建议立即在管理后台修改为自己记得住的密码。"
+          EOF
