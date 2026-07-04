@@ -229,6 +229,7 @@ class HistoryOut(BaseModel):
     answer: str
     sources: list[dict[str, Any]]
     created_at: datetime
+    favorited: bool = False
 
 
 class SystemStats(BaseModel):

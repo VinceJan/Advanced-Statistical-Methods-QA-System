@@ -69,7 +69,7 @@ export const api = {
   clearHistory: (token: string) => request<{ message: string }>("/api/history", { method: "DELETE" }, token),
   toggleFavorite: (token: string, historyId: number) =>
     request<{ favorited: boolean }>(`/api/history/${historyId}/favorite`, { method: "POST" }, token),
-  favorites: (token: string) => request<{ id: number; history_id: number; created_at: string }[]>("/api/history/favorites", {}, token),
+  favorites: (token: string) => request<HistoryItem[]>("/api/history/favorites", {}, token),
   saveNote: (token: string, historyId: number, content: string) =>
     request<{ id: number; history_id: number; content: string; created_at: string; updated_at: string }>(`/api/history/${historyId}/notes`, { method: "POST", body: JSON.stringify({ content }) }, token),
   getNote: (token: string, historyId: number) =>
@@ -100,6 +100,8 @@ export const api = {
     request<TextChunk[]>(`/api/admin/chunks${q ? `?q=${encodeURIComponent(q)}` : ""}`, {}, token),
   adminChunkDetail: (token: string, chunkId: string) =>
     request<TextChunk>(`/api/admin/chunks/${encodeURIComponent(chunkId)}`, {}, token),
+  chunkDetail: (token: string, chunkId: string) =>
+    request<TextChunk>(`/api/system/chunks/${encodeURIComponent(chunkId)}`, {}, token),
   rebuildChunks: (token: string) => request<{ text_chunks: number }>("/api/admin/chunks/rebuild", { method: "POST" }, token),
   adminHistories: (token: string) => request<HistoryItem[]>("/api/admin/histories", {}, token)
 };

@@ -15,6 +15,7 @@ import {
   Clock3,
   Database,
   GitBranch,
+  Heart,
   KeyRound,
   LayoutDashboard,
   LogIn,
@@ -41,7 +42,7 @@ function SourceModal({ chunkId, token, onClose }: { chunkId: string; token: stri
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.adminChunkDetail(token, chunkId)
+    api.chunkDetail(token, chunkId)
       .then((data) => { if (!cancelled) setChunk(data); })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "加载失败"); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -76,35 +77,33 @@ function SourceModal({ chunkId, token, onClose }: { chunkId: string; token: stri
 
 /* ── 可展开来源卡片 ── */
 function SourceCard({ source, token, index }: { source: AskResponse["sources"][number]; token: string; index: number }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(index === 0);
   const [showModal, setShowModal] = useState(false);
 
   return (
     <>
-      <details className="sourceCard" open={index === 0}>
-        <summary>
-          <div className="sourceCardHeader">
-            <strong>{source.chapter}</strong>
-            <span>PDF 第 {source.pdf_page} 页 · 相关度 {source.score}</span>
-          </div>
-          <div className="sourceCardActions">
-            <button
-              className="textBtn"
-              onClick={(e) => { e.preventDefault(); setExpanded((v) => !v); }}
-              title={expanded ? "收起" : "展开"}
-            >
-              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              {expanded ? "收起" : "展开"}
-            </button>
-            <button className="textBtn" onClick={(e) => { e.preventDefault(); setShowModal(true); }}>
-              查看完整原文
-            </button>
-          </div>
-        </summary>
+      <div className="sourceCard">
+        <div className="sourceCardHeader">
+          <strong>{source.chapter}</strong>
+          <span>PDF 第 {source.pdf_page} 页 · 相关度 {source.score}</span>
+        </div>
+        <div className="sourceCardActions">
+          <button
+            className="textBtn"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? "收起" : "展开"}
+          >
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {expanded ? "收起" : "展开"}
+          </button>
+          <button className="textBtn" onClick={() => setShowModal(true)}>
+            查看完整原文
+          </button>
+        </div>
         <div className={`sourceCardBody ${expanded ? "open" : ""}`}>
           <p>{source.summary || source.snippet}</p>
         </div>
-      </details>
+      </div>
       {showModal && <SourceModal chunkId={source.chunk_id} token={token} onClose={() => setShowModal(false)} />}
     </>
   );
@@ -572,12 +571,58 @@ function GraphExplorer({ token, setToast }: { token: string; setToast: (value: s
 function HistoryView({ token, setToast }: { token: string; setToast: (value: string) => void }) {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
-  async function load() { try { setItems(await api.history(token)); } catch (err) { setToast(err instanceof Error ? err.message : "加载历史失败"); } }
-  async function clear() { try { await api.clearHistory(token); setSelected(null); await load(); } catch (err) { setToast(err instanceof Error ? err.message : "清空失败"); } }
-  useEffect(() => { load(); }, []);
+  const [filter, setFilter] = useState<"all" | "favorites">("all");
+
+  async function load() {
+    try {
+      const data = filter === "favorites" ? await api.favorites(token) : await api.history(token);
+      setItems(data);
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "加载历史失败");
+    }
+  }
+
+  async function clear() {
+    try {
+      await api.clearHistory(token);
+      setSelected(null);
+      await load();
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "清空失败");
+    }
+  }
+
+  async function toggleFavorite(item: HistoryItem, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      const result = await api.toggleFavorite(token, item.id);
+      if (filter === "all") {
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, favorited: result.favorited } : i)));
+      } else {
+        setItems((prev) => prev.filter((i) => i.id !== item.id));
+      }
+      if (selected?.id === item.id) {
+        setSelected((prev) => (prev ? { ...prev, favorited: result.favorited } : prev));
+      }
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "收藏操作失败");
+    }
+  }
+
+  useEffect(() => { load(); }, [filter]);
+
   return (
     <div className="workspace">
-      <section className="topBand"><div><h2>学习历史</h2><p>点击任意记录可查看当时回答全文和引用来源。</p></div><button className="danger" onClick={clear}><Trash2 size={17} />清空</button></section>
+      <section className="topBand">
+        <div><h2>学习历史</h2><p>点击任意记录可查看当时回答全文和引用来源。</p></div>
+        <div className="row">
+          <div className="segmented">
+            <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>全部</button>
+            <button className={filter === "favorites" ? "active" : ""} onClick={() => setFilter("favorites")}><Heart size={14} />收藏</button>
+          </div>
+          <button className="danger" onClick={clear}><Trash2 size={17} />清空</button>
+        </div>
+      </section>
       <section className="historyLayout">
         <div className="historyList">
           {items.map((item) => (
@@ -585,6 +630,15 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
               <time>{new Date(item.created_at).toLocaleString()}</time>
               <h3>{item.question}</h3>
               <p>{item.answer_summary}</p>
+              <div className="historyActions">
+                <button
+                  className={`favoriteBtn ${item.favorited ? "favorited" : ""}`}
+                  onClick={(e) => toggleFavorite(item, e)}
+                  title={item.favorited ? "取消收藏" : "收藏"}
+                >
+                  <Heart size={16} fill={item.favorited ? "currentColor" : "none"} />
+                </button>
+              </div>
             </article>
           ))}
         </div>

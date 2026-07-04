@@ -21,7 +21,10 @@ def list_history(db: Session = Depends(get_db), user: User = Depends(current_use
         .limit(100)
         .all()
     )
-    return [history_to_out(item) for item in items]
+    favorite_history_ids = {
+        f.history_id for f in db.query(Favorite).filter(Favorite.user_id == user.id).all()
+    }
+    return [history_to_out(item, favorite_history_ids) for item in items]
 
 
 @router.delete("")
@@ -45,15 +48,24 @@ def toggle_favorite(history_id: int, db: Session = Depends(get_db), user: User =
     return {"favorited": True}
 
 
-@router.get("/favorites", response_model=list[FavoriteOut])
-def list_favorites(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[FavoriteOut]:
-    items = db.query(Favorite).filter(Favorite.user_id == user.id).order_by(Favorite.created_at.desc()).all()
-    return [FavoriteOut(id=item.id, history_id=item.history_id, created_at=item.created_at) for item in items]
+@router.get("/favorites", response_model=list[HistoryOut])
+def list_favorites(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[HistoryOut]:
+    items = (
+        db.query(QuestionHistory)
+        .join(Favorite, Favorite.history_id == QuestionHistory.id)
+        .filter(Favorite.user_id == user.id)
+        .order_by(Favorite.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    favorite_history_ids = {f.history_id for f in db.query(Favorite).filter(Favorite.user_id == user.id).all()}
+    return [history_to_out(item, favorite_history_ids) for item in items]
 
 
 @router.post("/{history_id}/notes")
-def save_note(history_id: int, content: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> UserNoteOut:
+def save_note(history_id: int, payload: dict[str, str], db: Session = Depends(get_db), user: User = Depends(current_user)) -> UserNoteOut:
     """保存或更新笔记"""
+    content = payload.get("content", "")
     existing = db.query(UserNote).filter(UserNote.user_id == user.id, UserNote.history_id == history_id).first()
     if existing:
         existing.content = content
@@ -75,7 +87,7 @@ def get_note(history_id: int, db: Session = Depends(get_db), user: User = Depend
     return UserNoteOut(id=item.id, history_id=item.history_id, content=item.content, created_at=item.created_at, updated_at=item.updated_at)
 
 
-def history_to_out(item: QuestionHistory) -> HistoryOut:
+def history_to_out(item: QuestionHistory, favorite_ids: set[int] | None = None) -> HistoryOut:
     return HistoryOut(
         id=item.id,
         conversation_id=item.conversation_id,
@@ -85,4 +97,5 @@ def history_to_out(item: QuestionHistory) -> HistoryOut:
         answer=item.answer,
         sources=[dict(x) for x in loads_list(item.sources_json) if isinstance(x, dict)],
         created_at=item.created_at,
+        favorited=(item.id in favorite_ids) if favorite_ids else False,
     )

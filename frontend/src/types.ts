@@ -115,6 +115,7 @@ export type HistoryItem = {
   answer: string;
   sources: Record<string, unknown>[];
   created_at: string;
+  favorited?: boolean;
 };
 
 export type SystemStats = {

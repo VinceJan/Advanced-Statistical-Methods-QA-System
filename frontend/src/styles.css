@@ -290,7 +290,26 @@ h3 { margin: 0 0 12px; font-size: 17px; }
 .historyLayout .historyList { grid-template-columns: 1fr; max-height: 720px; overflow: auto; }
 .historyList article { cursor: pointer; }
 .historyList article.active { border-color: var(--brand); background: #f4fbfc; }
-.historyDetail { position: sticky; top: 18px; max-height: calc(100vh - 70px); overflow: auto; }
+.historyActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.favoriteBtn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+}
+.favoriteBtn:hover { background: var(--soft); color: var(--brand); }
+.favoriteBtn.favorited { color: var(--danger); }
+.favoriteBtn.favorited:hover { color: #c41e1e; }
 .qaList h3, .historyList h3 { margin: 10px 0 8px; }
 .qaList footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
