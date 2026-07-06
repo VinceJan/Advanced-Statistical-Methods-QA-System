@@ -84,6 +84,8 @@ def test_next_stage_stats_pagination_and_reference_books() -> None:
         stats_body = stats.json()
         assert stats_body["retrieval_mode"] in {"tfidf", "vector", "hybrid", "auto"}
         assert "vector_index_ready" in stats_body
+        if stats_body["retrieval_mode"] in {"vector", "hybrid", "auto"}:
+            assert stats_body["vector_index_ready"] is True
         assert "active_book" in stats_body
         assert "index_status" in stats_body
 

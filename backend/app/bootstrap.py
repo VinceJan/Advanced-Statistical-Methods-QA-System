@@ -8,6 +8,7 @@ from .seed_data import seed_core_data, seed_demo_chunks_if_needed
 from .settings import settings
 from .models import ReferenceBook, TextChunk, User
 from .security import hash_password
+from .vector_index import build_vector_index, vector_index_ready
 
 
 def bootstrap(db: Session) -> None:
@@ -22,6 +23,7 @@ def bootstrap(db: Session) -> None:
     else:
         seed_demo_chunks_if_needed(db)
     refresh_default_book_counts(db, default_book)
+    ensure_vector_index_if_needed(db)
 
 
 def seed_admin(db: Session) -> None:
@@ -72,3 +74,13 @@ def refresh_default_book_counts(db: Session, book: ReferenceBook) -> None:
     book.index_status = "ready" if chunk_count else ("missing" if not settings.pdf_path.exists() else "empty")
     book.updated_at = __import__("backend.app.models", fromlist=["utcnow"]).utcnow()
     db.commit()
+
+
+def ensure_vector_index_if_needed(db: Session) -> None:
+    if settings.retrieval_mode not in {"vector", "hybrid", "auto"}:
+        return
+    if vector_index_ready(settings.vector_index_dir):
+        return
+    if db.query(TextChunk.id).first() is None:
+        return
+    build_vector_index(db, settings.vector_index_dir)
