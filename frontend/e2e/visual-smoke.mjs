@@ -26,9 +26,10 @@ async function login(page, username = "admin", password = "Admin@123456") {
 
 async function ask(page, question) {
   await page.locator("textarea").fill(question);
-  await page.getByRole("button", { name: /提问|生成中/ }).click();
+  await page.locator(".askButton").click();
   await expect(page.locator(".answerPanel")).toBeVisible({ timeout: 20000 });
-  await expect(page.locator(".chatBubble.assistant").last()).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole("heading", { name: "当前轮次详情" })).toBeVisible({ timeout: 20000 });
+  await expect(page.locator(".statusBadge").last()).toBeVisible({ timeout: 20000 });
 }
 
 async function main() {
@@ -54,27 +55,33 @@ async function main() {
   await page.screenshot({ path: path.join(outDir, "desktop-ridge-answer.png"), fullPage: true });
 
   await ask(page, "那它为什么能做变量选择？");
-  await expect(page.getByText("最近会话")).toBeVisible();
-  await expect(page.locator(".chatBubble.user")).toHaveCount(3);
-  await expect(page.locator(".chatBubble.assistant")).toHaveCount(3);
+  await expect(page.locator(".chatBubble.user").last()).toBeVisible();
   await expect(page.locator(".perfStrip").last()).toContainText("总耗时");
   await expect(page.getByText("关联知识图谱子图")).toBeVisible();
   await page.screenshot({ path: path.join(outDir, "desktop-follow-up.png"), fullPage: true });
 
-  await page.getByRole("button", { name: "学习历史" }).click();
-  await expect(page.getByText("点击任意记录")).toBeVisible();
+  await page.getByRole("button", { name: "我的笔记" }).click();
+  await page.getByRole("button", { name: "全部历史" }).click();
   await page.locator(".historyList article").first().click();
   await expect(page.locator(".historyDetail .markdown")).toBeVisible();
   await page.screenshot({ path: path.join(outDir, "desktop-history-detail.png"), fullPage: true });
 
   await page.getByRole("button", { name: "管理后台" }).click();
-  await expect(page.getByText("系统状态")).toBeVisible();
-  await expect(page.getByText("模型 API")).toBeVisible();
-  await expect(page.getByText("用户与角色")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "问答对" })).toBeVisible();
-  await expect(page.getByText("教材文本块")).toBeVisible();
+  await expect(page.getByText("当前索引状态")).toBeVisible();
+  await expect(page.getByText("ISLRv2_corrected_J...2023.pdf").first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("button", { name: "教材与索引" })).toBeVisible();
+  await page.screenshot({ path: path.join(outDir, "desktop-admin-overview.png"), fullPage: true });
+
+  await page.getByRole("button", { name: "教材与索引" }).click();
+  await expect(page.getByRole("heading", { name: "教材与索引" })).toBeVisible();
+  await expect(page.getByText("上传新的 PDF 参考书")).toBeVisible();
+  await page.screenshot({ path: path.join(outDir, "desktop-admin-books.png"), fullPage: true });
+
+  await page.getByRole("button", { name: "用户与权限" }).click();
   await expect(page.getByText("admin").first()).toBeVisible({ timeout: 10000 });
-  await expect(page.locator(".compactList article").first()).toBeVisible({ timeout: 10000 });
+
+  await page.getByRole("button", { name: "知识点" }).click();
+  await expect(page.getByRole("heading", { name: "知识点" })).toBeVisible();
 
   const conceptName = `验收可视节点${Date.now()}`;
   await page.getByPlaceholder("slug").fill(`visual-${Date.now()}`);
@@ -89,13 +96,14 @@ async function main() {
   await createdConcept.getByRole("button", { name: "删除" }).click();
   await expect(createdConcept).toHaveCount(0, { timeout: 10000 });
 
-  await page.getByRole("button", { name: "进入管理" }).click();
+  await page.getByRole("button", { name: "问答对", exact: true }).click();
+  await page.getByRole("button", { name: "进入分页管理" }).click();
   await expect(page.getByRole("heading", { name: "问答对管理" })).toBeVisible();
   await expect(page.getByRole("button", { name: "新增问答对" })).toBeVisible();
+  await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible();
+  await page.screenshot({ path: path.join(outDir, "desktop-qa-pagination.png"), fullPage: true });
   await page.getByRole("button", { name: "管理后台" }).click();
-  await expect(page.getByText("admin").first()).toBeVisible({ timeout: 10000 });
-  await expect(page.locator(".adminMetrics").getByText("69").first()).toBeVisible({ timeout: 10000 });
-  await expect(page.locator(".compactList article").first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText("当前索引状态")).toBeVisible({ timeout: 10000 });
   await page.screenshot({ path: path.join(outDir, "desktop-admin.png"), fullPage: true });
 
   await ensureUser("visual_student", "password123");

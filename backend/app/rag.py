@@ -14,6 +14,8 @@ from .llm import LLMClient
 from .models import ChatConversation, ChatMessage, Concept, GraphEdge, QAPair, QuestionHistory, TextChunk, User, utcnow
 from .schemas import AskResponse, PerformanceOut, SourceOut
 from .serialization import dumps, loads_list
+from .settings import settings
+from .vector_index import search_vector_index, vector_index_ready
 
 
 TERM_EXPANSIONS = {
@@ -337,6 +339,44 @@ class RagService:
         )
 
     def retrieve(self, question: str, top_k: int = 5) -> list[SourceOut]:
+        mode = settings.retrieval_mode if settings.retrieval_mode in {"tfidf", "vector", "hybrid", "auto"} else "auto"
+        vector_ready = vector_index_ready(settings.vector_index_dir)
+        if mode == "vector":
+            return self.retrieve_vector(question, top_k) if vector_ready else []
+        if mode == "hybrid":
+            return self.retrieve_hybrid(question, top_k) if vector_ready else self.retrieve_tfidf(question, top_k)
+        if mode == "auto" and vector_ready:
+            return self.retrieve_vector(question, top_k)
+        return self.retrieve_tfidf(question, top_k)
+
+    def retrieve_vector(self, question: str, top_k: int = 5) -> list[SourceOut]:
+        started = time.perf_counter()
+        results = search_vector_index(self.db, question, settings.vector_index_dir, top_k=top_k)
+        self.last_retrieval_ms = elapsed_ms(started)
+        self.last_retrieval_cache = "vector"
+        return results
+
+    def retrieve_hybrid(self, question: str, top_k: int = 5) -> list[SourceOut]:
+        started = time.perf_counter()
+        vector_results = search_vector_index(self.db, question, settings.vector_index_dir, top_k=top_k * 2)
+        tfidf_results = self.retrieve_tfidf(question, top_k=top_k * 2)
+        merged: dict[str, SourceOut] = {}
+        for source in tfidf_results:
+            merged[source.chunk_id] = source
+        for source in vector_results:
+            if source.chunk_id in merged:
+                existing = merged[source.chunk_id]
+                existing.score = round(existing.score + source.score, 4)
+                if not existing.summary and source.summary:
+                    existing.summary = source.summary
+            else:
+                merged[source.chunk_id] = source
+        results = sorted(merged.values(), key=lambda item: item.score, reverse=True)[:top_k]
+        self.last_retrieval_ms = elapsed_ms(started)
+        self.last_retrieval_cache = "hybrid"
+        return results
+
+    def retrieve_tfidf(self, question: str, top_k: int = 5) -> list[SourceOut]:
         started = time.perf_counter()
         self.last_retrieval_cache = get_cache_state(self.db)
         index = get_text_index(self.db)

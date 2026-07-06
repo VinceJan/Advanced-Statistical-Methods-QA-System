@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -10,7 +11,7 @@ from ..app_config import LLM_API_KEY_KEY, LLM_BASE_URL_KEY, LLM_MODEL_KEY, get_l
 from ..database import get_db
 from ..graph_service import concept_to_out, edge_to_out
 from ..llm import LLMClient
-from ..models import ChatConversation, Concept, GraphEdge, QAPair, QuestionHistory, SessionToken, TextChunk, User
+from ..models import ChatConversation, Concept, GraphEdge, QAPair, QuestionHistory, ReferenceBook, SessionToken, TextChunk, User, utcnow
 from ..pdf_indexer import build_text_chunks
 from ..schemas import (
     ConceptCreate,
@@ -23,6 +24,8 @@ from ..schemas import (
     LlmConfigOut,
     LlmConfigTestOut,
     LlmConfigUpdate,
+    ReferenceBookIndexStatus,
+    ReferenceBookOut,
     TextChunkOut,
     UserPasswordUpdate,
     UserOut,
@@ -30,8 +33,161 @@ from ..schemas import (
 )
 from ..security import hash_password, require_admin
 from ..serialization import dumps, loads_list
+from ..settings import settings
+from ..vector_index import build_vector_index, vector_index_ready
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def book_to_out(book: ReferenceBook) -> ReferenceBookOut:
+    return ReferenceBookOut(
+        id=book.id,
+        display_name=book.display_name,
+        filename=book.filename,
+        storage_path=book.storage_path,
+        is_active=bool(book.is_active),
+        page_count=book.page_count,
+        chunk_count=book.chunk_count,
+        index_status=book.index_status,
+        index_error=book.index_error,
+        retrieval_mode=book.retrieval_mode,
+        created_at=book.created_at,
+        updated_at=book.updated_at,
+    )
+
+
+@router.get("/reference-books", response_model=list[ReferenceBookOut])
+def list_reference_books(db: Session = Depends(get_db), _: User = Depends(require_admin)) -> list[ReferenceBookOut]:
+    return [book_to_out(book) for book in db.query(ReferenceBook).order_by(ReferenceBook.is_active.desc(), ReferenceBook.id).all()]
+
+
+@router.post("/reference-books/upload", response_model=ReferenceBookOut)
+async def upload_reference_book(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> ReferenceBookOut:
+    filename = Path(file.filename or "").name
+    if not filename or Path(filename).suffix.lower() != ".pdf":
+        raise HTTPException(status_code=400, detail="只能上传 PDF 文件")
+    payload = await file.read()
+    max_bytes = settings.max_reference_book_mb * 1024 * 1024
+    if len(payload) > max_bytes:
+        raise HTTPException(status_code=400, detail=f"PDF 文件不能超过 {settings.max_reference_book_mb}MB")
+    settings.reference_books_dir.mkdir(parents=True, exist_ok=True)
+    target = unique_upload_path(settings.reference_books_dir, filename)
+    target.write_bytes(payload)
+    book = ReferenceBook(
+        display_name=filename,
+        filename=target.name,
+        storage_path=str(target),
+        is_active=0,
+        page_count=detect_pdf_page_count(target),
+        chunk_count=0,
+        index_status="pending",
+        index_error="",
+        retrieval_mode=settings.retrieval_mode,
+    )
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return book_to_out(book)
+
+
+def unique_upload_path(directory: Path, filename: str) -> Path:
+    stem = Path(filename).stem
+    suffix = Path(filename).suffix.lower()
+    candidate = directory / f"{stem}{suffix}"
+    counter = 1
+    while candidate.exists():
+        candidate = directory / f"{stem}-{counter}{suffix}"
+        counter += 1
+    return candidate
+
+
+def detect_pdf_page_count(path: Path) -> int:
+    try:
+        from pypdf import PdfReader
+
+        return len(PdfReader(str(path)).pages)
+    except Exception:
+        return 0
+
+
+@router.get("/reference-books/{book_id}/index-status", response_model=ReferenceBookIndexStatus)
+def reference_book_index_status(book_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)) -> ReferenceBookIndexStatus:
+    book = db.get(ReferenceBook, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="参考书不存在")
+    return ReferenceBookIndexStatus(
+        book_id=book.id,
+        index_status=book.index_status,
+        chunk_count=book.chunk_count,
+        vector_index_ready=vector_index_ready(settings.vector_index_dir),
+        index_error=book.index_error,
+    )
+
+
+@router.patch("/reference-books/{book_id}/activate", response_model=ReferenceBookOut)
+def activate_reference_book(book_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)) -> ReferenceBookOut:
+    book = db.get(ReferenceBook, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="参考书不存在")
+    db.query(ReferenceBook).update({ReferenceBook.is_active: 0})
+    book.is_active = 1
+    book.updated_at = utcnow()
+    db.commit()
+    db.refresh(book)
+    return book_to_out(book)
+
+
+@router.post("/reference-books/{book_id}/rebuild", response_model=ReferenceBookIndexStatus)
+def rebuild_reference_book(book_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)) -> ReferenceBookIndexStatus:
+    book = db.get(ReferenceBook, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="参考书不存在")
+    pdf_path = Path(book.storage_path)
+    if not pdf_path.exists() or pdf_path.suffix.lower() != ".pdf":
+        book.index_status = "failed"
+        book.index_error = "参考书 PDF 不存在或类型不正确"
+        book.updated_at = utcnow()
+        db.commit()
+        raise HTTPException(status_code=400, detail=book.index_error)
+    book.index_status = "indexing"
+    book.index_error = ""
+    book.updated_at = utcnow()
+    db.commit()
+    try:
+        db.query(TextChunk).filter(TextChunk.book_id == book.id).delete()
+        db.commit()
+        count = build_text_chunks(db, pdf_path=pdf_path, book_id=book.id)
+        if count == 0:
+            raise RuntimeError("未能从 PDF 抽取到可用文本块")
+        state = build_vector_index(db, settings.vector_index_dir)
+        book.chunk_count = count
+        book.index_status = "ready" if state.ready else "failed"
+        book.index_error = "" if state.ready else "向量索引为空"
+        book.updated_at = utcnow()
+        db.commit()
+        return ReferenceBookIndexStatus(
+            book_id=book.id,
+            index_status=book.index_status,
+            chunk_count=book.chunk_count,
+            vector_index_ready=state.ready,
+            index_error=book.index_error,
+        )
+    except Exception as exc:
+        book.index_status = "failed"
+        book.index_error = str(exc)
+        book.updated_at = utcnow()
+        db.commit()
+        return ReferenceBookIndexStatus(
+            book_id=book.id,
+            index_status=book.index_status,
+            chunk_count=book.chunk_count,
+            vector_index_ready=vector_index_ready(settings.vector_index_dir),
+            index_error=book.index_error,
+        )
 
 
 @router.get("/users", response_model=list[UserOut])

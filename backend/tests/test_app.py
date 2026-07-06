@@ -9,6 +9,51 @@ from backend.app.main import app
 from backend.app.schemas import SourceOut
 
 
+def test_vector_index_builds_and_searches_text_chunks(tmp_path) -> None:
+    with TestClient(app):
+        from backend.app import database
+        from backend.app.vector_index import build_vector_index, search_vector_index
+
+        assert database.SessionLocal is not None
+        db = database.SessionLocal()
+        try:
+            state = build_vector_index(db, tmp_path)
+            assert state.ready
+            assert state.chunk_count >= 50
+            results = search_vector_index(db, "岭回归和 Lasso 有什么区别？", tmp_path, top_k=5)
+            assert results
+            assert results[0].score > 0
+            joined = " ".join(result.summary.lower() + " " + result.snippet.lower() for result in results)
+            assert "ridge" in joined or "lasso" in joined
+        finally:
+            db.close()
+
+
+def test_rag_service_uses_vector_mode_when_configured(tmp_path) -> None:
+    with TestClient(app):
+        from backend.app import database
+        from backend.app.rag import RagService
+        from backend.app.settings import settings
+        from backend.app.vector_index import build_vector_index
+
+        assert database.SessionLocal is not None
+        db = database.SessionLocal()
+        old_mode = settings.retrieval_mode
+        old_index_dir = settings.vector_index_dir
+        try:
+            build_vector_index(db, tmp_path)
+            object.__setattr__(settings, "retrieval_mode", "vector")
+            object.__setattr__(settings, "vector_index_dir", tmp_path)
+            service = RagService(db)
+            sources = service.retrieve("岭回归和 Lasso 有什么区别？", top_k=3)
+            assert sources
+            assert service.last_retrieval_cache == "vector"
+        finally:
+            object.__setattr__(settings, "retrieval_mode", old_mode)
+            object.__setattr__(settings, "vector_index_dir", old_index_dir)
+            db.close()
+
+
 def test_health_and_stats() -> None:
     with TestClient(app) as client:
         health = client.get("/api/health")
@@ -20,6 +65,102 @@ def test_health_and_stats() -> None:
         assert body["graph_edges"] >= 100
         assert body["qa_pairs"] >= 60
         assert body["text_chunks"] >= 50
+
+
+def test_next_stage_stats_pagination_and_reference_books() -> None:
+    with TestClient(app) as client:
+        admin = client.post("/api/auth/login", json={"username": "admin", "password": "Admin@123456"})
+        assert admin.status_code == 200
+        admin_headers = {"Authorization": f"Bearer {admin.json()['token']}"}
+
+        student = client.post("/api/auth/register", json={"username": "book_student", "password": "password123"})
+        if student.status_code == 409:
+            student = client.post("/api/auth/login", json={"username": "book_student", "password": "password123"})
+        assert student.status_code == 200
+        student_headers = {"Authorization": f"Bearer {student.json()['token']}"}
+
+        stats = client.get("/api/system/stats")
+        assert stats.status_code == 200
+        stats_body = stats.json()
+        assert stats_body["retrieval_mode"] in {"tfidf", "vector", "hybrid", "auto"}
+        assert "vector_index_ready" in stats_body
+        assert "active_book" in stats_body
+        assert "index_status" in stats_body
+
+        paged = client.get("/api/qa-pairs?page=1&page_size=10", headers=admin_headers)
+        assert paged.status_code == 200
+        paged_body = paged.json()
+        assert paged_body["page"] == 1
+        assert paged_body["page_size"] == 10
+        assert paged_body["total"] >= 60
+        assert len(paged_body["items"]) <= 10
+
+        student_books = client.get("/api/admin/reference-books", headers=student_headers)
+        assert student_books.status_code == 403
+
+        books = client.get("/api/admin/reference-books", headers=admin_headers)
+        assert books.status_code == 200
+        book_items = books.json()
+        assert isinstance(book_items, list)
+        assert book_items
+        assert any(book["is_active"] for book in book_items)
+        active = next(book for book in book_items if book["is_active"])
+        assert active["filename"] == "ISLRv2_corrected_June_2023.pdf"
+        assert active["chunk_count"] >= 50
+
+        rebuilt = client.post(f"/api/admin/reference-books/{active['id']}/rebuild", headers=admin_headers)
+        assert rebuilt.status_code == 200
+        rebuilt_body = rebuilt.json()
+        assert rebuilt_body["index_status"] == "ready"
+        assert rebuilt_body["chunk_count"] >= 50
+        assert rebuilt_body["vector_index_ready"] is True
+
+
+def test_admin_can_upload_reference_book_metadata() -> None:
+    with TestClient(app) as client:
+        admin = client.post("/api/auth/login", json={"username": "admin", "password": "Admin@123456"})
+        assert admin.status_code == 200
+        admin_headers = {"Authorization": f"Bearer {admin.json()['token']}"}
+
+        student = client.post("/api/auth/register", json={"username": "upload_student", "password": "password123"})
+        if student.status_code == 409:
+            student = client.post("/api/auth/login", json={"username": "upload_student", "password": "password123"})
+        student_headers = {"Authorization": f"Bearer {student.json()['token']}"}
+
+        student_upload = client.post(
+            "/api/admin/reference-books/upload",
+            headers=student_headers,
+            files={"file": ("student.pdf", b"%PDF-1.4\n%%EOF", "application/pdf")},
+        )
+        assert student_upload.status_code == 403
+
+        uploaded = client.post(
+            "/api/admin/reference-books/upload",
+            headers=admin_headers,
+            files={"file": ("uploaded-reference.pdf", b"%PDF-1.4\n%%EOF", "application/pdf")},
+        )
+        assert uploaded.status_code == 200
+        body = uploaded.json()
+        assert body["filename"].endswith(".pdf")
+        assert body["display_name"] == "uploaded-reference.pdf"
+        assert body["is_active"] is False
+        assert body["index_status"] in {"pending", "empty"}
+
+        from pathlib import Path
+
+        from backend.app import database
+        from backend.app.models import ReferenceBook
+
+        assert database.SessionLocal is not None
+        db = database.SessionLocal()
+        try:
+            book = db.get(ReferenceBook, body["id"])
+            if book:
+                Path(book.storage_path).unlink(missing_ok=True)
+                db.delete(book)
+                db.commit()
+        finally:
+            db.close()
 
 
 def test_auth_qa_crud_and_ask() -> None:

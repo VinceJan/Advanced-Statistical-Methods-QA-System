@@ -34,7 +34,7 @@ import {
   X
 } from "lucide-react";
 import { api, ApiError } from "./api";
-import type { AskResponse, ChatConversation, ChatMessage, Concept, Graph, GraphEdge, HistoryItem, LlmConfig, QAPair, SystemStats, TextChunk, UserRecord } from "./types";
+import type { AskResponse, ChatConversation, ChatMessage, Concept, Graph, GraphEdge, HistoryItem, LlmConfig, QAPair, ReferenceBook, SystemStats, TextChunk, UserRecord } from "./types";
 
 /* ── 来源原文模态框 ── */
 function SourceModal({ chunkId, token, onClose }: { chunkId: string; token: string; onClose: () => void }) {
@@ -786,18 +786,24 @@ function QAManager({ token, setToast }: { token: string; setToast: (value: strin
   const [pairs, setPairs] = useState<QAPair[]>([]);
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [editing, setEditing] = useState<QAPair | null>(null);
   const [draft, setDraft] = useState({ question: "", answer: "", type: "概念解释", quality_status: "已校对" });
 
-  async function load() {
+  async function load(nextPage = page) {
     try {
-      setPairs(await api.qaPairs(token, { q: query, type: type || undefined }));
+      const result = await api.qaPairsPage(token, { q: query, type: type || undefined, page: nextPage, page_size: pageSize });
+      setPairs(result.items);
+      setTotal(result.total);
+      setPage(result.page);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "加载问答对失败");
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(1); }, [pageSize]);
 
   async function save() {
     try {
@@ -805,7 +811,7 @@ function QAManager({ token, setToast }: { token: string; setToast: (value: strin
       else await api.createQaPair(token, { ...draft, concept_ids: [], source_refs: [] });
       setEditing(null);
       setDraft({ question: "", answer: "", type: "概念解释", quality_status: "已校对" });
-      await load();
+      await load(page);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "保存失败");
     }
@@ -814,10 +820,15 @@ function QAManager({ token, setToast }: { token: string; setToast: (value: strin
   async function remove(id: number) {
     try {
       await api.deleteQaPair(token, id);
-      await load();
+      await load(page);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "删除失败");
     }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  function search() {
+    load(1);
   }
 
   return (
@@ -826,7 +837,8 @@ function QAManager({ token, setToast }: { token: string; setToast: (value: strin
       <section className="toolbar">
         <div className="searchInput"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索问题或答案" /></div>
         <select value={type} onChange={(e) => setType(e.target.value)}><option value="">全部类型</option><option>概念解释</option><option>关系查询</option><option>应用场景</option></select>
-        <button onClick={load}><Search size={17} />查询</button>
+        <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}><option value={10}>每页 10 条</option><option value={20}>每页 20 条</option><option value={25}>每页 25 条</option></select>
+        <button onClick={search}><Search size={17} />查询</button>
       </section>
       <section className="editor elevated">
         <input value={draft.question} onChange={(e) => setDraft({ ...draft, question: e.target.value })} placeholder="问题文本" />
@@ -843,6 +855,13 @@ function QAManager({ token, setToast }: { token: string; setToast: (value: strin
           </article>
         ))}
       </div>
+      <section className="paginationBar">
+        <span>共 {total} 条 · 第 {page} / {totalPages} 页</span>
+        <div className="row compact">
+          <button onClick={() => load(page - 1)} disabled={page <= 1}>上一页</button>
+          <button onClick={() => load(page + 1)} disabled={page >= totalPages}>下一页</button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1137,6 +1156,7 @@ function HistoryView({ token, setToast }: { token: string; setToast: (value: str
 
 const emptyConceptDraft = { slug: "", name_cn: "", name_en: "", aliases: "", chapter: "", description: "" };
 const emptyEdgeDraft = { source_id: "", target_id: "", relation_type: "相关", evidence: "" };
+type AdminView = "overview" | "books" | "users" | "model" | "qa" | "chunks" | "concepts" | "edges" | "histories";
 
 function AdminConsole({
   token,
@@ -1164,10 +1184,13 @@ function AdminConsole({
   const [llmConfig, setLlmConfig] = useState<LlmConfig | null>(null);
   const [llmDraft, setLlmDraft] = useState({ base_url: "", model: "", api_key: "" });
   const [passwordDrafts, setPasswordDrafts] = useState<Record<number, string>>({});
+  const [adminView, setAdminView] = useState<AdminView>("overview");
+  const [books, setBooks] = useState<ReferenceBook[]>([]);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   async function loadAll() {
     try {
-      const [nextStats, nextUsers, nextConcepts, nextEdges, nextChunks, nextQAPairs, nextHistories, nextLlmConfig] = await Promise.all([
+      const [nextStats, nextUsers, nextConcepts, nextEdges, nextChunks, nextQAPairs, nextHistories, nextLlmConfig, nextBooks] = await Promise.all([
         api.stats(),
         api.adminUsers(token),
         api.concepts(token),
@@ -1175,7 +1198,8 @@ function AdminConsole({
         api.adminChunks(token, query),
         api.qaPairs(token),
         api.adminHistories(token),
-        api.llmConfig(token)
+        api.llmConfig(token),
+        api.referenceBooks(token)
       ]);
       setStats(nextStats);
       setUsers(nextUsers);
@@ -1185,6 +1209,7 @@ function AdminConsole({
       setQaPairs(nextQAPairs);
       setHistories(nextHistories);
       setLlmConfig(nextLlmConfig);
+      setBooks(nextBooks);
       setLlmDraft((draft) => ({
         base_url: draft.base_url || nextLlmConfig.base_url,
         model: draft.model || nextLlmConfig.model,
@@ -1205,6 +1230,44 @@ function AdminConsole({
       await loadAll();
     } catch (err) {
       setToast(err instanceof Error ? err.message : "重建失败");
+    }
+  }
+
+  async function uploadBook() {
+    if (!uploadFile) {
+      setToast("请选择 PDF 文件");
+      return;
+    }
+    try {
+      await api.uploadReferenceBook(token, uploadFile);
+      setUploadFile(null);
+      setToast("参考书已上传，可在确认后设为当前教材并重建索引");
+      await loadAll();
+      reloadStats();
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "上传参考书失败");
+    }
+  }
+
+  async function activateBook(id: number) {
+    try {
+      await api.activateReferenceBook(token, id);
+      setToast("当前参考书已切换");
+      await loadAll();
+      reloadStats();
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "切换参考书失败");
+    }
+  }
+
+  async function rebuildBook(id: number) {
+    try {
+      const result = await api.rebuildReferenceBook(token, id);
+      setToast(`索引重建完成：${result.chunk_count} 个文本块，向量索引${result.vector_index_ready ? "可用" : "未就绪"}`);
+      await loadAll();
+      reloadStats();
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "重建参考书索引失败");
     }
   }
 
@@ -1344,9 +1407,62 @@ function AdminConsole({
 
   return (
     <div className="workspace">
-      <section className="topBand"><div><h2>管理后台</h2><p>管理员可审计用户、数据资产、知识图谱、文本块和提问历史。</p></div><button className="primary" onClick={loadAll}><LayoutDashboard size={17} />刷新</button></section>
-      <section className="adminGrid">
-        <AdminCard title="系统状态"><div className="metricsStrip adminMetrics"><Metric label="知识点" value={stats?.concepts ?? "-"} /><Metric label="图谱边" value={stats?.graph_edges ?? "-"} /><Metric label="问答对" value={stats?.qa_pairs ?? "-"} /><Metric label="文本块" value={stats?.text_chunks ?? "-"} /><Metric label="LLM" value={stats?.llm_configured ? "已配置" : "未配置"} /><Metric label="教材" value={stats?.pdf_available ? "可用" : "缺失"} /></div></AdminCard>
+      <section className="topBand">
+        <div><h2>管理后台</h2><p>管理员可审计用户、数据资产、知识图谱、文本块和提问历史。</p></div>
+        <button className="primary" onClick={loadAll}><LayoutDashboard size={17} />刷新</button>
+      </section>
+      <section className="adminTabs">
+        {[
+          ["overview", "总览"],
+          ["books", "教材与索引"],
+          ["users", "用户与权限"],
+          ["model", "模型 API"],
+          ["qa", "问答对"],
+          ["chunks", "文本块"],
+          ["concepts", "知识点"],
+          ["edges", "图谱边"],
+          ["histories", "历史审计"]
+        ].map(([view, label]) => (
+          <button key={view} className={adminView === view ? "active" : ""} onClick={() => setAdminView(view as AdminView)}>{label}</button>
+        ))}
+      </section>
+
+      {adminView === "overview" && (
+        <section className="adminGrid compact">
+          <button className="metricButton" onClick={() => setAdminView("concepts")}><Metric label="知识点" value={stats?.concepts ?? "-"} /></button>
+          <button className="metricButton" onClick={() => setAdminView("edges")}><Metric label="图谱边" value={stats?.graph_edges ?? "-"} /></button>
+          <button className="metricButton" onClick={() => setAdminView("qa")}><Metric label="问答对" value={stats?.qa_pairs ?? "-"} /></button>
+          <button className="metricButton" onClick={() => setAdminView("chunks")}><Metric label="文本块" value={stats?.text_chunks ?? "-"} /></button>
+          <button className="metricButton" onClick={() => setAdminView("model")}><Metric label="LLM" value={stats?.llm_configured ? "已配置" : "未配置"} /></button>
+          <button className="metricButton" onClick={() => setAdminView("books")}><Metric label="教材" value={stats?.active_book ? "已配置" : (stats?.pdf_available ? "可用" : "缺失")} /></button>
+          <AdminCard title="当前索引状态">
+            <div className="statusRows">
+              <span>检索模式<strong>{stats?.retrieval_mode ?? "-"}</strong></span>
+              <span>向量索引<strong>{stats?.vector_index_ready ? "可用" : "未就绪"}</strong></span>
+              <span>索引状态<strong>{stats?.index_status ?? "-"}</strong></span>
+              <span>当前教材<strong>{shortFileName(stats?.active_book?.filename ?? "未设置")}</strong></span>
+            </div>
+          </AdminCard>
+        </section>
+      )}
+
+      {adminView === "books" && (
+        <AdminCard title="教材与索引">
+          <div className="adminForm">
+            <label>上传新的 PDF 参考书<input type="file" accept="application/pdf,.pdf" onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} /></label>
+            <div className="row"><button className="primary" onClick={uploadBook}>上传参考书</button><button onClick={() => loadAll()}>刷新状态</button></div>
+            <p className="hint">上传文件保存在服务器运行数据目录，不会进入 Git。切换参考书后需要重建索引。</p>
+          </div>
+          <div className="tableWrap">
+            <table className="adminTable">
+              <thead><tr><th>参考书</th><th>状态</th><th>文本块</th><th>向量模式</th><th>操作</th></tr></thead>
+              <tbody>{books.map((book) => <tr key={book.id}><td><strong>{book.display_name}</strong><span>{book.filename}</span></td><td><span className={book.index_status === "ready" ? "tag" : "tag muted"}>{book.is_active ? "当前" : book.index_status}</span>{book.index_error && <p className="error">{book.index_error}</p>}</td><td>{book.chunk_count}</td><td>{book.retrieval_mode}</td><td><div className="row compact">{!book.is_active && <button onClick={() => activateBook(book.id)}>设为当前</button>}<button className="primary" onClick={() => rebuildBook(book.id)}><Wrench size={16} />重建</button></div></td></tr>)}</tbody>
+            </table>
+          </div>
+        </AdminCard>
+      )}
+
+      {adminView === "model" && (
         <AdminCard title="模型 API">
           <div className="adminForm">
             <label>Base URL<input value={llmDraft.base_url} onChange={(e) => setLlmDraft({ ...llmDraft, base_url: e.target.value })} placeholder="https://api.minimaxi.com/v1" /></label>
@@ -1356,11 +1472,23 @@ function AdminConsole({
             <p className="hint">{llmConfig?.has_api_key ? `当前 Key：${llmConfig.api_key_preview}` : "当前没有可用 API Key"} · {llmConfig?.disabled ? "外部 LLM 已被环境变量禁用" : "外部 LLM 可按配置调用"}</p>
           </div>
         </AdminCard>
+      )}
+
+      {adminView === "users" && (
         <AdminCard title="用户与角色">
-          <table className="userAdminTable"><tbody>{users.map((user) => <tr key={user.id}><td><strong>{user.username}</strong><span>{new Date(user.created_at).toLocaleDateString()}</span></td><td><span className="tag">{user.role}</span></td><td><div className="userActions"><button onClick={async () => { await api.updateUserRole(token, user.id, user.role === "admin" ? "student" : "admin"); await loadAll(); }}>切换角色</button><input type="password" value={passwordDrafts[user.id] || ""} onChange={(e) => setPasswordDrafts({ ...passwordDrafts, [user.id]: e.target.value })} placeholder="新密码" /><button onClick={() => resetPassword(user.id)}>改密</button><button onClick={() => logoutUser(user.id)}>注销</button><button className="danger" onClick={() => removeUser(user.id)}><UserX size={15} />删除</button></div></td></tr>)}</tbody></table>
+          <div className="tableWrap"><table className="userAdminTable"><tbody>{users.map((user) => <tr key={user.id}><td><strong>{user.username}</strong><span>{new Date(user.created_at).toLocaleDateString()}</span></td><td><span className="tag">{user.role}</span></td><td><div className="userActions"><button onClick={async () => { await api.updateUserRole(token, user.id, user.role === "admin" ? "student" : "admin"); await loadAll(); }}>切换角色</button><input type="password" value={passwordDrafts[user.id] || ""} onChange={(e) => setPasswordDrafts({ ...passwordDrafts, [user.id]: e.target.value })} placeholder="新密码" /><button onClick={() => resetPassword(user.id)}>改密</button><button onClick={() => logoutUser(user.id)}>注销</button><button className="danger" onClick={() => removeUser(user.id)}><UserX size={15} />删除</button></div></td></tr>)}</tbody></table></div>
         </AdminCard>
-        <AdminCard title="问答对"><div className="sectionHeader"><strong>{qaPairs.length} 条</strong><button onClick={openQAManager}>进入管理</button></div><div className="compactList">{qaPairs.slice(0, 6).map((pair) => <article key={pair.id}><strong>{pair.question}</strong><span>{pair.type} · {pair.quality_status}</span><p>{pair.answer}</p></article>)}</div></AdminCard>
+      )}
+
+      {adminView === "qa" && (
+        <AdminCard title="问答对"><div className="sectionHeader"><strong>{qaPairs.length} 条</strong><button onClick={openQAManager}>进入分页管理</button></div><div className="compactList">{qaPairs.slice(0, 8).map((pair) => <article key={pair.id}><strong>{pair.question}</strong><span>{pair.type} · {pair.quality_status}</span><p>{pair.answer}</p></article>)}</div></AdminCard>
+      )}
+
+      {adminView === "chunks" && (
         <AdminCard title="教材文本块"><div className="row"><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索文本块" /><button onClick={loadAll}>搜索</button><button className="primary" onClick={rebuild}><Wrench size={16} />重建索引</button></div><div className="compactList">{chunks.map((chunk) => <article key={chunk.id}><strong>{chunk.chapter} · PDF {chunk.pdf_page}</strong><p>{chunk.preview}</p></article>)}</div></AdminCard>
+      )}
+
+      {adminView === "concepts" && (
         <AdminCard title="知识点">
           <div className="adminForm">
             {!editingConcept && <input value={conceptDraft.slug} onChange={(e) => setConceptDraft({ ...conceptDraft, slug: e.target.value })} placeholder="slug" />}
@@ -1373,6 +1501,9 @@ function AdminConsole({
           </div>
           <div className="compactList two">{concepts.slice(0, 80).map((concept) => <article key={concept.id}><strong>{concept.name_cn}</strong><span>{concept.name_en}</span><p>{concept.description}</p><footer><button onClick={() => { setEditingConcept(concept); setConceptDraft({ slug: concept.slug, name_cn: concept.name_cn, name_en: concept.name_en, aliases: concept.aliases.join("，"), chapter: concept.chapter, description: concept.description }); }}>编辑</button><button className="danger" onClick={() => removeConcept(concept.id)}><Trash2 size={15} />删除</button></footer></article>)}</div>
         </AdminCard>
+      )}
+
+      {adminView === "edges" && (
         <AdminCard title="图谱边">
           <div className="adminForm">
             <div className="row">
@@ -1385,8 +1516,11 @@ function AdminConsole({
           </div>
           <div className="compactList">{edges.slice(0, 120).map((edge) => <article key={edge.id}><strong>{edge.source_name} --{edge.relation_type}--&gt; {edge.target_name}</strong><p>{edge.evidence}</p><footer><button onClick={() => { setEditingEdge(edge); setEdgeDraft({ source_id: String(edge.source_id), target_id: String(edge.target_id), relation_type: edge.relation_type, evidence: edge.evidence }); }}>编辑</button><button className="danger" onClick={() => removeEdge(edge.id)}><Trash2 size={15} />删除</button></footer></article>)}</div>
         </AdminCard>
+      )}
+
+      {adminView === "histories" && (
         <AdminCard title="历史审计"><div className="compactList">{histories.map((item) => <article key={item.id}><strong>{item.question}</strong><p>{item.answer_summary}</p></article>)}</div></AdminCard>
-      </section>
+      )}
     </div>
   );
 }
@@ -1423,6 +1557,13 @@ function GraphCanvas({ graph, onNodeClick }: { graph: Graph; onNodeClick?: (id: 
 
 function wrapLabel(label: string) {
   return label.length > 6 ? `${label.slice(0, 4)}\n${label.slice(4)}` : label;
+}
+
+function shortFileName(name: string) {
+  if (name.length <= 26) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot) : "";
+  return `${name.slice(0, 18)}...${name.slice(Math.max(dot - 4, 18), dot)}${ext}`;
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {

@@ -79,6 +79,7 @@ class TextChunk(Base):
     __tablename__ = "text_chunks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    book_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     chunk_id: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     text: Mapped[str] = mapped_column(Text)
     chapter: Mapped[str] = mapped_column(String(120), default="")
@@ -86,6 +87,36 @@ class TextChunk(Base):
     pdf_page: Mapped[int] = mapped_column(Integer, index=True)
     source_file: Mapped[str] = mapped_column(String(255), default="")
     embedding_model: Mapped[str] = mapped_column(String(120), default="local-hybrid")
+
+
+class ReferenceBook(Base):
+    __tablename__ = "reference_books"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(255))
+    filename: Mapped[str] = mapped_column(String(255), index=True)
+    storage_path: Mapped[str] = mapped_column(Text)
+    is_active: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    page_count: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    index_status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    index_error: Mapped[str] = mapped_column(Text, default="")
+    retrieval_mode: Mapped[str] = mapped_column(String(40), default="auto")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class IndexJob(Base):
+    __tablename__ = "index_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    book_id: Mapped[int] = mapped_column(Integer, index=True)
+    status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    retrieval_mode: Mapped[str] = mapped_column(String(40), default="auto")
+    message: Mapped[str] = mapped_column(Text, default="")
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class ChatConversation(Base):

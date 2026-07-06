@@ -106,6 +106,13 @@ export type QAPair = {
   updated_at: string;
 };
 
+export type Paginated<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
 export type HistoryItem = {
   id: number;
   conversation_id: number | null;
@@ -126,6 +133,17 @@ export type SystemStats = {
   text_chunks: number;
   llm_configured: boolean;
   pdf_available: boolean;
+  retrieval_mode: "tfidf" | "vector" | "hybrid" | "auto";
+  vector_index_ready: boolean;
+  active_book: {
+    id: number;
+    display_name: string;
+    filename: string;
+    chunk_count: number;
+    index_status: string;
+  } | null;
+  active_book_chunks: number;
+  index_status: string;
 };
 
 export type UserRecord = {
@@ -144,6 +162,29 @@ export type TextChunk = {
   source_file: string;
   preview: string;
   embedding_model: string;
+};
+
+export type ReferenceBook = {
+  id: number;
+  display_name: string;
+  filename: string;
+  storage_path: string;
+  is_active: boolean;
+  page_count: number;
+  chunk_count: number;
+  index_status: string;
+  index_error: string;
+  retrieval_mode: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReferenceBookIndexStatus = {
+  book_id: number;
+  index_status: string;
+  chunk_count: number;
+  vector_index_ready: boolean;
+  index_error: string;
 };
 
 export type LlmConfig = {

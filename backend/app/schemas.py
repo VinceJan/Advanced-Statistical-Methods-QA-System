@@ -75,6 +75,13 @@ class QAPairOut(QAPairBase):
     updated_at: datetime
 
 
+class PaginatedQAPairs(BaseModel):
+    items: list[QAPairOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class SourceOut(BaseModel):
     chunk_id: str
     chapter: str
@@ -220,6 +227,29 @@ class TextChunkOut(BaseModel):
     embedding_model: str
 
 
+class ReferenceBookOut(BaseModel):
+    id: int
+    display_name: str
+    filename: str
+    storage_path: str
+    is_active: bool
+    page_count: int = 0
+    chunk_count: int = 0
+    index_status: str
+    index_error: str = ""
+    retrieval_mode: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReferenceBookIndexStatus(BaseModel):
+    book_id: int
+    index_status: str
+    chunk_count: int = 0
+    vector_index_ready: bool = False
+    index_error: str = ""
+
+
 class HistoryOut(BaseModel):
     id: int
     conversation_id: int | None = None
@@ -240,6 +270,11 @@ class SystemStats(BaseModel):
     text_chunks: int
     llm_configured: bool
     pdf_available: bool
+    retrieval_mode: str = "auto"
+    vector_index_ready: bool = False
+    active_book: dict[str, Any] | None = None
+    active_book_chunks: int = 0
+    index_status: str = "unknown"
 
 
 class FavoriteOut(BaseModel):

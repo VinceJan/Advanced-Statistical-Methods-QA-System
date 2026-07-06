@@ -6,21 +6,23 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import QAPair, User, utcnow
-from ..schemas import QAPairCreate, QAPairOut, QAPairUpdate
+from ..schemas import PaginatedQAPairs, QAPairCreate, QAPairOut, QAPairUpdate
 from ..security import current_user, require_admin
 from ..serialization import dumps, loads_list
 
 router = APIRouter(prefix="/qa-pairs", tags=["qa-pairs"])
 
 
-@router.get("", response_model=list[QAPairOut])
+@router.get("", response_model=list[QAPairOut] | PaginatedQAPairs)
 def list_qa_pairs(
     q: str | None = None,
     type: str | None = None,
     concept_id: int | None = Query(default=None),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(current_user),
-) -> list[QAPairOut]:
+) -> list[QAPairOut] | PaginatedQAPairs:
     query = db.query(QAPair)
     if q:
         like = f"%{q}%"
@@ -30,6 +32,15 @@ def list_qa_pairs(
     pairs = query.order_by(QAPair.id).all()
     if concept_id is not None:
         pairs = [pair for pair in pairs if concept_id in [int(x) for x in loads_list(pair.concept_ids_json)]]
+    if page is not None:
+        total = len(pairs)
+        start = (page - 1) * page_size
+        return PaginatedQAPairs(
+            items=[qa_to_out(pair) for pair in pairs[start : start + page_size]],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
     return [qa_to_out(pair) for pair in pairs]
 
 

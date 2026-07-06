@@ -23,6 +23,10 @@ class Settings:
     llm_api_key: str = os.getenv("MINIMAX_API_KEY", "")
     admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
     admin_password: str = os.getenv("ADMIN_PASSWORD", "Admin@123456")
+    retrieval_mode: str = os.getenv("APP_RETRIEVAL_MODE", "auto").lower()
+    reference_books_dir: Path = Path(os.getenv("APP_REFERENCE_BOOKS_DIR", str(DATA_DIR / "reference_books")))
+    vector_index_dir: Path = Path(os.getenv("APP_VECTOR_INDEX_DIR", str(DATA_DIR / "vector_index")))
+    max_reference_book_mb: int = int(os.getenv("APP_MAX_REFERENCE_BOOK_MB", "80"))
     cors_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",

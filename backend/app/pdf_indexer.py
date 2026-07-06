@@ -38,8 +38,8 @@ def build_text_chunks_if_needed(db: Session, min_chunks: int = 200) -> int:
     return build_text_chunks(db)
 
 
-def build_text_chunks(db: Session) -> int:
-    pdf_path = settings.pdf_path
+def build_text_chunks(db: Session, pdf_path: Path | None = None, book_id: int | None = None) -> int:
+    pdf_path = pdf_path or settings.pdf_path
     if not pdf_path.exists():
         return 0
     try:
@@ -66,6 +66,7 @@ def build_text_chunks(db: Session) -> int:
             total += 1
             db.add(
                 TextChunk(
+                    book_id=book_id,
                     chunk_id=f"islr-p{page_index:03d}-{chunk_no:02d}",
                     text=chunk,
                     chapter=chapter,

@@ -9,8 +9,19 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Push-Location frontend
 npm run build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-npm audit --omit=dev
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$auditPassed = $false
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+  npm audit --omit=dev --registry=https://registry.npmjs.org
+  if ($LASTEXITCODE -eq 0) {
+    $auditPassed = $true
+    break
+  }
+  if ($attempt -lt 3) {
+    Write-Host "npm audit 第 $attempt 次失败，5 秒后重试..."
+    Start-Sleep -Seconds 5
+  }
+}
+if (-not $auditPassed) { exit 1 }
 Pop-Location
 
 $backend = $null

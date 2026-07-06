@@ -1,4 +1,4 @@
-import type { AskResponse, AuthResponse, ChatConversation, ChatConversationDetail, Concept, Graph, GraphEdge, HistoryItem, LlmConfig, LlmConfigTest, QAPair, SystemStats, TextChunk, UserRecord } from "./types";
+import type { AskResponse, AuthResponse, ChatConversation, ChatConversationDetail, Concept, Graph, GraphEdge, HistoryItem, LlmConfig, LlmConfigTest, Paginated, QAPair, ReferenceBook, ReferenceBookIndexStatus, SystemStats, TextChunk, UserRecord } from "./types";
 
 const API_BASE = "";
 
@@ -13,7 +13,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(options.headers);
-  if (!headers.has("Content-Type") && options.body) {
+  if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
   if (token) {
@@ -64,6 +64,15 @@ export const api = {
     if (params.concept_id) search.set("concept_id", String(params.concept_id));
     return request<QAPair[]>(`/api/qa-pairs${search.toString() ? `?${search.toString()}` : ""}`, {}, token);
   },
+  qaPairsPage: (token: string, params: { q?: string; type?: string; concept_id?: number; page?: number; page_size?: number } = {}) => {
+    const search = new URLSearchParams();
+    if (params.q) search.set("q", params.q);
+    if (params.type) search.set("type", params.type);
+    if (params.concept_id) search.set("concept_id", String(params.concept_id));
+    search.set("page", String(params.page ?? 1));
+    search.set("page_size", String(params.page_size ?? 10));
+    return request<Paginated<QAPair>>(`/api/qa-pairs?${search.toString()}`, {}, token);
+  },
   createQaPair: (token: string, pair: Omit<QAPair, "id" | "created_at" | "updated_at">) =>
     request<QAPair>("/api/qa-pairs", { method: "POST", body: JSON.stringify(pair) }, token),
   updateQaPair: (token: string, id: number, patch: Partial<QAPair>) =>
@@ -107,5 +116,17 @@ export const api = {
   chunkDetail: (token: string, chunkId: string) =>
     request<TextChunk>(`/api/system/chunks/${encodeURIComponent(chunkId)}`, {}, token),
   rebuildChunks: (token: string) => request<{ text_chunks: number }>("/api/admin/chunks/rebuild", { method: "POST" }, token),
-  adminHistories: (token: string) => request<HistoryItem[]>("/api/admin/histories", {}, token)
+  adminHistories: (token: string) => request<HistoryItem[]>("/api/admin/histories", {}, token),
+  referenceBooks: (token: string) => request<ReferenceBook[]>("/api/admin/reference-books", {}, token),
+  uploadReferenceBook: (token: string, file: File) => {
+    const form = new FormData();
+    form.set("file", file);
+    return request<ReferenceBook>("/api/admin/reference-books/upload", { method: "POST", body: form }, token);
+  },
+  activateReferenceBook: (token: string, id: number) =>
+    request<ReferenceBook>(`/api/admin/reference-books/${id}/activate`, { method: "PATCH" }, token),
+  rebuildReferenceBook: (token: string, id: number) =>
+    request<ReferenceBookIndexStatus>(`/api/admin/reference-books/${id}/rebuild`, { method: "POST" }, token),
+  referenceBookIndexStatus: (token: string, id: number) =>
+    request<ReferenceBookIndexStatus>(`/api/admin/reference-books/${id}/index-status`, {}, token)
 };

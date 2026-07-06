@@ -55,6 +55,7 @@ def run_sqlite_migrations() -> None:
         return
     user_columns = {column["name"] for column in inspector.get_columns("users")}
     history_columns = {column["name"] for column in inspector.get_columns("question_history")} if "question_history" in tables else set()
+    text_chunk_columns = {column["name"] for column in inspector.get_columns("text_chunks")} if "text_chunks" in tables else set()
     with engine.begin() as conn:
         if "role" not in user_columns:
             conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'student'"))
@@ -62,6 +63,8 @@ def run_sqlite_migrations() -> None:
             conn.execute(text("ALTER TABLE question_history ADD COLUMN conversation_id INTEGER"))
         if "question_history" in tables and "message_id" not in history_columns:
             conn.execute(text("ALTER TABLE question_history ADD COLUMN message_id INTEGER"))
+        if "text_chunks" in tables and "book_id" not in text_chunk_columns:
+            conn.execute(text("ALTER TABLE text_chunks ADD COLUMN book_id INTEGER"))
 
 
 def get_db() -> Generator[Session, None, None]:
