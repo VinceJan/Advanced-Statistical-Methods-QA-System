@@ -9,6 +9,7 @@ import "katex/dist/katex.min.css";
 import {
   BookOpen,
   Brain,
+  Check,
   ChevronDown,
   ChevronUp,
   CircleUserRound,
@@ -21,6 +22,7 @@ import {
   LogIn,
   LogOut,
   MessageSquareText,
+  MoreHorizontal,
   NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
@@ -28,6 +30,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  SquarePen,
   Trash2,
   UserX,
   Wrench,
@@ -196,7 +199,7 @@ function App() {
         </div>
         <div className="userBox">
           <CircleUserRound size={18} />
-          <span>{username}<small>{role === "admin" ? "管理员" : "学生"}</small></span>
+          <span><strong>{username}</strong><small>{role === "admin" ? "管理员" : "学生"}</small></span>
           <button title="退出登录" onClick={logout}><LogOut size={17} /></button>
         </div>
       </aside>
@@ -279,6 +282,9 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
   const [showFavorites, setShowFavorites] = useState(false);
   const [showFullThread, setShowFullThread] = useState(false);
   const [favoritedIds, setFavoritedIds] = useState<Set<number>>(new Set());
+  const [conversationMenuId, setConversationMenuId] = useState<number | null>(null);
+  const [renamingConversationId, setRenamingConversationId] = useState<number | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   // 防止同一 message 重复点击收藏按钮触发并发 API
   const favoriteInflightRef = useRef<Set<number>>(new Set());
 
@@ -405,15 +411,48 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
 
   async function deleteCurrentConversation() {
     if (!conversationId) return;
+    await deleteConversationById(conversationId);
+  }
+
+  async function deleteConversationById(id: number) {
     try {
-      await api.deleteConversation(token, conversationId);
-      setConversationId(null);
-      setMessages([]);
-      setActiveMessageId(null);
+      await api.deleteConversation(token, id);
+      if (id === conversationId) {
+        setConversationId(null);
+        setMessages([]);
+        setActiveMessageId(null);
+      }
       setConversations(await api.conversations(token));
+      setConversationMenuId(null);
+      setRenamingConversationId(null);
+      setToast("会话已删除");
     } catch (err) {
       setToast(err instanceof Error ? err.message : "删除会话失败");
     }
+  }
+
+  async function renameConversation(id: number) {
+    const title = renameDraft.trim();
+    if (!title) {
+      setToast("会话标题不能为空");
+      return;
+    }
+    try {
+      const updated = await api.renameConversation(token, id, title);
+      setConversations((prev) => prev.map((item) => item.id === id ? { ...item, title: updated.title, updated_at: updated.updated_at } : item));
+      setRenamingConversationId(null);
+      setConversationMenuId(null);
+      setRenameDraft("");
+      setToast("会话已重命名");
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : "重命名失败");
+    }
+  }
+
+  function beginRenameConversation(item: ChatConversation) {
+    setRenamingConversationId(item.id);
+    setRenameDraft(item.title);
+    setConversationMenuId(null);
   }
 
   async function newConversation() {
@@ -424,6 +463,8 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
     setShowFullThread(false);
     setShowFavorites(false);
     setSidebarQuery("");
+    setConversationMenuId(null);
+    setRenamingConversationId(null);
     historyCacheRef.current = null;
   }
 
@@ -525,14 +566,77 @@ function AskWorkspace({ token, setToast }: { token: string; setToast: (value: st
                 <div key={group.label} className="sidebarGroup">
                   <div className="sidebarGroupLabel">{group.label}</div>
                   {group.items.map((item) => (
-                    <button
+                    <div
                       key={item.id}
-                      className={`sidebarConvItem ${item.id === conversationId ? "active" : ""}`}
-                      onClick={() => openConversation(item.id)}
-                      title={item.title}
+                      className={`sidebarConvRow ${item.id === conversationId ? "active" : ""}`}
                     >
-                      <span className="sidebarConvTitle">{item.title}</span>
-                    </button>
+                      {renamingConversationId === item.id ? (
+                        <form
+                          className="sidebarRenameForm"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            renameConversation(item.id);
+                          }}
+                        >
+                          <input
+                            value={renameDraft}
+                            onChange={(event) => setRenameDraft(event.target.value)}
+                            aria-label="会话标题"
+                            autoFocus
+                          />
+                          <button className="iconBtn" type="submit" aria-label="保存会话标题">
+                            <Check size={15} />
+                          </button>
+                          <button
+                            className="iconBtn"
+                            type="button"
+                            aria-label="取消重命名"
+                            onClick={() => {
+                              setRenamingConversationId(null);
+                              setRenameDraft("");
+                            }}
+                          >
+                            <X size={15} />
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <button
+                            className="sidebarConvMain"
+                            onClick={() => {
+                              setConversationMenuId(null);
+                              openConversation(item.id);
+                            }}
+                            title={item.title}
+                          >
+                            <span className="sidebarConvTitle">{item.title}</span>
+                          </button>
+                          <button
+                            className="conversationMenuButton iconBtn"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setConversationMenuId((current) => current === item.id ? null : item.id);
+                            }}
+                            aria-label={`管理会话：${item.title}`}
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
+                          {conversationMenuId === item.id && (
+                            <div className="conversationMenu">
+                              <button onClick={() => { setConversationMenuId(null); openConversation(item.id); }}>
+                                <MessageSquareText size={15} />打开
+                              </button>
+                              <button onClick={() => beginRenameConversation(item)}>
+                                <SquarePen size={15} />重命名
+                              </button>
+                              <button className="dangerText" onClick={() => deleteConversationById(item.id)}>
+                                <Trash2 size={15} />删除
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
                   ))}
                 </div>
               ))}
@@ -834,11 +938,11 @@ function QAManager({ token, setToast }: { token: string; setToast: (value: strin
   return (
     <div className="workspace">
       <section className="topBand"><div><h2>问答对管理</h2><p>维护课程问答对，普通用户可用于课程数据管理演示。</p></div></section>
-      <section className="toolbar">
-        <div className="searchInput"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索问题或答案" /></div>
+      <section className="toolbar qaFilterBar">
+        <div className="searchInput qaSearchField"><Search size={18} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索问题或答案" /></div>
         <select value={type} onChange={(e) => setType(e.target.value)}><option value="">全部类型</option><option>概念解释</option><option>关系查询</option><option>应用场景</option></select>
         <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}><option value={10}>每页 10 条</option><option value={20}>每页 20 条</option><option value={25}>每页 25 条</option></select>
-        <button onClick={search}><Search size={17} />查询</button>
+        <button className="qaSearchButton" onClick={search}><Search size={17} />查询</button>
       </section>
       <section className="editor elevated">
         <input value={draft.question} onChange={(e) => setDraft({ ...draft, question: e.target.value })} placeholder="问题文本" />

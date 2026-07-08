@@ -6,7 +6,7 @@
 
 ## 核心能力
 
-- 多轮问答：问答工作台支持会话列表、连续追问、会话删除和逐轮证据面板。
+- 多轮问答：问答工作台支持会话列表、连续追问、侧栏会话打开/重命名/删除和逐轮证据面板。
 - 可信 RAG：系统先判断问题是否属于高级统计方法课程范围；无关问题返回空证据状态，不展示伪来源、伪推荐或伪图谱。
 - 教材检索：从英文文本型 PDF 抽取正文，按章节和页码切分，中文问题通过术语扩展检索英文教材证据。
 - 向量 RAG：支持本地持久化向量索引，并可在 `auto`、`vector`、`hybrid`、`tfidf` 模式间切换；弱 VPS 或索引缺失时可自动降级。
@@ -46,7 +46,7 @@
 │   ├── 完成度评估.md
 │   ├── 验收记录.md
 │   └── 实验报告.md
-├── deliverables/             # 答辩 PPT 与演讲稿
+├── deliverables/             # 课程交付物，含最终项目报告
 ├── scripts/                  # Windows PowerShell 启动与验证脚本
 ├── deploy/Caddyfile          # Docker Compose 自带 Caddy 入口
 ├── docs/project/             # 题目、目标、约束、上下文等过程性材料
@@ -173,7 +173,7 @@ docs/qa-screenshots/
 | 系统统计 | `GET /api/system/stats` |
 | 注册/登录 | `POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me` |
 | 问答 | `POST /api/chat/ask` |
-| 会话 | `GET /api/chat/conversations`、`GET /api/chat/conversations/{id}`、`DELETE /api/chat/conversations/{id}` |
+| 会话 | `GET /api/chat/conversations`、`GET /api/chat/conversations/{id}`、`PATCH /api/chat/conversations/{id}`、`DELETE /api/chat/conversations/{id}` |
 | 图谱 | `GET /api/graph/concepts`、`GET /api/graph/subgraph`、`GET /api/graph/recommendations` |
 | 历史 | `GET /api/history`、`DELETE /api/history` |
 | 问答对 | `GET /api/qa-pairs`；写入接口需要管理员 |
@@ -236,7 +236,7 @@ https://aistudyassistant.bluesclawd.dev
 - `docs/完成度评估.md`：当前完成度评分和剩余优化。
 - `docs/验收记录.md`：验证命令、截图和运行结果。
 - `docs/实验报告.md`：课程报告正文。
-- `deliverables/`：详尽答辩版 PPT、适中汇报版 PPT 和对应演讲稿。
+- `deliverables/`：课程交付物目录；当前包含最终项目报告 `高级统计方法知识图谱智能问答系统_项目报告.docx`。旧 PPT 已由用户清空，如后续需要可用 `scripts/make_ppt_decks.py` 重新生成。
 
 ## 安全说明
 

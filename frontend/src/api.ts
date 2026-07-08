@@ -47,6 +47,8 @@ export const api = {
     request<AskResponse>("/api/chat/ask", { method: "POST", body: JSON.stringify({ question, conversation_id }) }, token),
   conversations: (token: string) => request<ChatConversation[]>("/api/chat/conversations", {}, token),
   conversation: (token: string, id: number) => request<ChatConversationDetail>(`/api/chat/conversations/${id}`, {}, token),
+  renameConversation: (token: string, id: number, title: string) =>
+    request<ChatConversation>(`/api/chat/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }, token),
   deleteConversation: (token: string, id: number) => request<{ message: string }>(`/api/chat/conversations/${id}`, { method: "DELETE" }, token),
   concepts: (token: string, q = "") => request<Concept[]>(`/api/graph/concepts${q ? `?q=${encodeURIComponent(q)}` : ""}`, {}, token),
   subgraph: (token: string, conceptId?: number, q?: string) => {

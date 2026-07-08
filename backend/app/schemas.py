@@ -148,6 +148,10 @@ class ChatConversationOut(BaseModel):
     message_count: int = 0
 
 
+class ChatConversationUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+
+
 class ChatConversationDetail(ChatConversationOut):
     messages: list[ChatMessageOut] = []
 

@@ -70,7 +70,11 @@ class LLMClient:
                 return AnswerResult(fallback, "local_fallback", type(exc).__name__)
 
     def local_answer(self, question: str, evidence: list[SourceOut], graph_notes: list[str]) -> str:
-        joined_context = f"{question} {' '.join(graph_notes)}".lower()
+        evidence_context = " ".join(
+            f"{source.chapter} {source.section} {source.summary} {source.snippet}"
+            for source in evidence[:5]
+        )
+        joined_context = f"{question} {' '.join(graph_notes)} {evidence_context}".lower()
         if "变量选择" in question and ("lasso" in joined_context or "l1" in joined_context or "l1" in question.lower()):
             return (
                 "Lasso 能做变量选择，核心原因是它使用 L1 惩罚。L1 惩罚会把系数估计压向 0，并且在优化几何上更容易让某些系数正好等于 0；"

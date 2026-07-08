@@ -5,9 +5,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ChatConversation, ChatMessage, User
+from ..models import ChatConversation, ChatMessage, User, utcnow
 from ..rag import RagService
-from ..schemas import AskRequest, AskResponse, ChatConversationDetail, ChatConversationOut, ChatMessageOut, ConceptOut, GraphOut, PerformanceOut, SourceOut
+from ..schemas import AskRequest, AskResponse, ChatConversationDetail, ChatConversationOut, ChatConversationUpdate, ChatMessageOut, ConceptOut, GraphOut, PerformanceOut, SourceOut
 from ..security import current_user
 from ..serialization import loads_dict, loads_list
 
@@ -69,6 +69,37 @@ def get_conversation(conversation_id: int, db: Session = Depends(get_db), user: 
         updated_at=conversation.updated_at,
         message_count=len(messages),
         messages=[message_to_out(item) for item in messages],
+    )
+
+
+@router.patch("/conversations/{conversation_id}", response_model=ChatConversationOut)
+def update_conversation(
+    conversation_id: int,
+    payload: ChatConversationUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> ChatConversationOut:
+    conversation = (
+        db.query(ChatConversation)
+        .filter(ChatConversation.id == conversation_id, ChatConversation.user_id == user.id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="会话标题不能为空")
+    conversation.title = title
+    conversation.updated_at = utcnow()
+    db.commit()
+    db.refresh(conversation)
+    message_count = db.query(func.count(ChatMessage.id)).filter(ChatMessage.conversation_id == conversation.id).scalar() or 0
+    return ChatConversationOut(
+        id=conversation.id,
+        title=conversation.title,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        message_count=int(message_count),
     )
 
 

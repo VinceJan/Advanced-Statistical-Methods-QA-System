@@ -26,14 +26,17 @@
 当前能力：
 
 - 中文多轮课程问答。
+- 本地向量索引 RAG，支持 `auto`、`vector`、`hybrid`、`tfidf` 检索模式。
 - 教材 RAG 来源引用。
 - 知识图谱子图和推荐问题。
 - 学习历史全文查看。
-- 管理后台。
+- 会话侧栏打开、重命名和删除。
+- 管理后台模块化总览、教材与索引、用户、模型、问答对、文本块、知识点、图谱边和历史审计。
 - LLM API Key / Base URL / 模型配置。
 - 学生账号改密、注销、删除。
+- 管理员上传参考书、切换当前教材并重建文本块和向量索引。
 - Docker Compose VPS 部署。
-- 两版 PPT 和演讲稿。
+- `deliverables/` 当前包含 18 页最终项目报告；旧 PPT 与演讲稿已由用户清空，如需要可按脚本重新生成。
 
 ## 不要碰的东西
 
@@ -104,7 +107,7 @@ http://127.0.0.1:5173
 .\scripts\verify.ps1
 ```
 
-### 重新生成 PPT
+### 重新生成 PPT（可选）
 
 ```powershell
 & "C:\Users\Jiang\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" scripts\make_ppt_decks.py
@@ -140,7 +143,7 @@ docker compose -p advanced-stat-qa -f docker-compose.server.yml ps
 docker compose -p advanced-stat-qa config --quiet
 ```
 
-如果改了 PPT 生成脚本，再检查：
+如果需要重新生成 PPT 或改了 PPT 生成脚本，再检查：
 
 ```powershell
 & "C:\Users\Jiang\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -c "from pptx import Presentation; from pathlib import Path; [print(p.name, len(Presentation(p).slides)) for p in Path('deliverables').glob('*.pptx')]"
@@ -244,6 +247,7 @@ curl -fsS https://aistudyassistant.bluesclawd.dev/api/health
 ## 当前已知的非致命问题
 
 - 前端构建会提示 bundle 超过 500KB，这是 Cytoscape、KaTeX、Markdown 等依赖带来的体积警告；当前不影响课程演示。
+- 看到旧 PPT 删除不要自动恢复；当前保留的课程交付物是最终项目报告，除非用户明确要求，否则不要重建旧 PPT。
 - `.pptx` 文件是二进制文件，如果只是打开/预览后出现 Git modified，要先确认是不是实际内容变化，别盲目提交。
 
 ## 判断是否可以收工

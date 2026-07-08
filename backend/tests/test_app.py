@@ -252,6 +252,21 @@ def test_auth_qa_crud_and_ask() -> None:
         assert conversation.status_code == 200
         assert len(conversation.json()["messages"]) >= 4
 
+        renamed = client.patch(
+            f"/api/chat/conversations/{answer['conversation_id']}",
+            headers=headers,
+            json={"title": "岭回归与 Lasso 对比"},
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["title"] == "岭回归与 Lasso 对比"
+
+        renamed_list = client.get("/api/chat/conversations", headers=headers)
+        assert renamed_list.status_code == 200
+        assert any(
+            item["id"] == answer["conversation_id"] and item["title"] == "岭回归与 Lasso 对比"
+            for item in renamed_list.json()
+        )
+
         unrelated = client.post("/api/chat/ask", headers=headers, json={"question": "我是谁"})
         assert unrelated.status_code == 200
         unrelated_body = unrelated.json()
@@ -394,6 +409,25 @@ def test_admin_permissions_and_admin_apis() -> None:
 
         assert client.delete(f"/api/admin/edges/{edge_id}", headers=admin_headers).status_code == 200
         assert client.delete(f"/api/admin/concepts/{concept_id}", headers=admin_headers).status_code == 200
+
+
+def test_local_fallback_uses_evidence_context_for_follow_up() -> None:
+    evidence = [
+        SourceOut(
+            chunk_id="lasso-variable-selection",
+            chapter="第6章",
+            section="Lasso",
+            pdf_page=256,
+            source_file="book.pdf",
+            snippet="The lasso leads to feature selection and uses an L1 penalty.",
+            summary="The lasso uses an L1 penalty and can set coefficients exactly to zero.",
+            score=10.0,
+        )
+    ]
+    answer = LLMClient().local_answer("那它为什么能做变量选择？", evidence, [])
+    assert "Lasso 能做变量选择" in answer
+    assert "L1 惩罚" in answer
+    assert "The lasso" not in answer
 
 
 def test_llm_client_mock_success_and_failure(monkeypatch) -> None:

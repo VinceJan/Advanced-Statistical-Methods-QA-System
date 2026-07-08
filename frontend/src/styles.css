@@ -112,7 +112,13 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
   padding-top: 14px;
   border-top: 1px solid rgba(255,255,255,.13);
 }
-.userBox span { flex: 1; display: grid; gap: 2px; }
+.userBox span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.userBox strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .userBox small { color: #aac1ca; font-size: 12px; }
 .userBox button { width: 36px; padding: 0; background: transparent; color: #fff; }
 
@@ -207,6 +213,7 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
 }
 .askSidebar .searchInput {
   background: #fff;
+  flex: 0 0 auto;
 }
 .askSidebar .searchInput input {
   font-size: 14px;
@@ -233,30 +240,43 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
   padding: 4px 8px 2px;
   letter-spacing: 0.02em;
 }
-.sidebarConvItem {
+.sidebarConvRow {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 34px;
-  height: auto;
-  padding: 7px 10px;
+  padding: 2px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
   color: var(--ink);
+}
+.sidebarConvRow:hover {
+  background: #eef4f6;
+  border-color: var(--line);
+}
+.sidebarConvRow.active {
+  background: #eaf6f8;
+  border-color: var(--brand);
+  color: var(--brandDark);
+}
+.sidebarConvMain {
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  height: auto;
+  justify-content: flex-start;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
   text-align: left;
   font-size: 14px;
   line-height: 1.35;
   cursor: pointer;
 }
-.sidebarConvItem:hover {
-  background: #eef4f6;
-  border-color: var(--line);
-}
-.sidebarConvItem.active {
-  background: #eaf6f8;
-  border-color: var(--brand);
-  color: var(--brandDark);
+.sidebarConvRow.active .sidebarConvMain {
   font-weight: 500;
 }
 .sidebarConvTitle {
@@ -264,6 +284,62 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.conversationMenuButton {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+}
+.sidebarConvRow:hover .conversationMenuButton,
+.sidebarConvRow.active .conversationMenuButton,
+.conversationMenuButton:focus-visible {
+  opacity: 1;
+}
+.conversationMenu {
+  position: absolute;
+  z-index: 20;
+  top: 32px;
+  right: 4px;
+  width: 142px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 36px rgba(20, 37, 54, .16);
+}
+.conversationMenu button {
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 7px 8px;
+  text-align: left;
+}
+.conversationMenu button:hover {
+  background: var(--soft);
+}
+.conversationMenu .dangerText {
+  color: var(--danger);
+}
+.sidebarRenameForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px 28px;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.sidebarRenameForm input {
+  min-height: 30px;
+  padding: 5px 7px;
+  font-size: 13px;
+}
+.sidebarRenameForm .iconBtn {
+  width: 28px;
+  height: 28px;
 }
 .favoritesEntry {
   display: flex;
@@ -317,6 +393,28 @@ textarea { min-height: 132px; resize: vertical; line-height: 1.65; }
 }
 .askMain .askBox {
   margin-top: 4px;
+}
+.askBox {
+  padding: 12px;
+}
+.askBox textarea {
+  min-height: 56px;
+  max-height: 128px;
+  padding: 11px 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.askBox .askActions {
+  margin-top: 10px;
+}
+.askBox .chips {
+  max-height: 34px;
+  overflow: hidden;
+}
+.askBox .chips button {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 13px;
 }
 .conversationList, .messageThread, .historyDetail {
   background: var(--panel);
@@ -436,6 +534,24 @@ h3 { margin: 0 0 12px; font-size: 17px; }
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
+}
+.qaFilterBar {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.6fr) minmax(170px, .55fr) minmax(170px, .55fr) 104px;
+  gap: 10px;
+  align-items: stretch;
+}
+.qaFilterBar .qaSearchField {
+  min-width: 0;
+}
+.qaFilterBar select,
+.qaFilterBar .qaSearchButton {
+  width: 100%;
+  margin-top: 0;
+}
+.qaFilterBar .qaSearchButton {
+  min-width: 92px;
+  justify-content: center;
 }
 .searchInput {
   display: flex;
@@ -949,11 +1065,14 @@ time { color: var(--muted); font-size: 12px; }
   .adminCard:nth-child(3), .adminCard:nth-child(5), .adminCard:nth-child(7) { grid-column: auto; }
   .historyDetail { position: static; max-height: none; }
   .userActions { grid-template-columns: 1fr 1fr; }
+  .qaFilterBar { grid-template-columns: minmax(0, 1fr) minmax(150px, .45fr); }
+  .qaFilterBar .qaSearchButton { min-width: 0; }
 }
 
 @media (max-width: 640px) {
   .main, .authPage { padding: 14px; }
   .askActions, .toolbar, .row, .topBand, .panelHeader { align-items: stretch; flex-direction: column; }
+  .qaFilterBar { display: flex; }
   .qaList, .historyList, .compactList.two { grid-template-columns: 1fr; }
   .adminMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .graphCanvas { height: 380px; }

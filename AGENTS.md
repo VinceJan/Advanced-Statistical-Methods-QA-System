@@ -25,6 +25,10 @@
 - `APP_DISABLE_LLM=true` 用于测试禁用外部 LLM。
 - `APP_DATABASE_URL` 默认 `sqlite:///data/app.db`。
 - `APP_PDF_PATH` 默认 `ISLRv2_corrected_June_2023.pdf`。
+- `APP_RETRIEVAL_MODE` 默认 `auto`，可选 `auto`、`vector`、`hybrid`、`tfidf`。
+- `APP_REFERENCE_BOOKS_DIR` 默认 `data/reference_books`，用于管理员上传参考书。
+- `APP_VECTOR_INDEX_DIR` 默认 `data/vector_index`，用于本地向量索引。
+- `APP_MAX_REFERENCE_BOOK_MB` 默认 `80`。
 - `ADMIN_USERNAME` / `ADMIN_PASSWORD` 用于种子化管理员账号。
 - `SITE_DOMAIN` / `COMPOSE_PROJECT_NAME` 用于 Docker/Caddy 部署。
 
@@ -35,6 +39,7 @@
 - RAG、范围判断、多轮上下文、性能统计：`backend/app/rag.py`。
 - MiniMax 调用和本地降级回答：`backend/app/llm.py`。
 - PDF 抽取和清洗：`backend/app/pdf_indexer.py`。
+- 本地向量索引构建与检索：`backend/app/vector_index.py`。
 - 种子知识点、图谱边和问答对：`backend/app/seed_data.py`。
 - 运行时 LLM 配置：`backend/app/app_config.py` 与 `system_config` 表。
 - 前端主界面：`frontend/src/main.tsx`。
@@ -63,6 +68,7 @@
 - 每一轮多轮追问都必须重新计算来源、推荐问题和知识图谱，不能沿用上一轮证据。
 - 清晰无关问题不能被多轮上下文污染，例如连续追问后再问“我是谁”仍应拒答。
 - 历史记录必须能查看当时回答全文和当时来源。
+- 会话列表必须允许用户打开、重命名和删除自己的会话；会话写入接口必须校验当前用户所有权。
 - 收藏与笔记：用户可收藏回答，在"我的笔记"页面查看并编辑学习笔记；笔记内容仅自己可见。
 - 普通学生不能看到管理后台和问答对管理入口；后端写入型管理接口必须校验管理员角色。
 - 管理员后台至少覆盖用户角色、学生删除/注销/改密、LLM API 配置、问答对入口、文本块检索/重建、知识点 CRUD、图谱边 CRUD、历史审计。
@@ -76,7 +82,7 @@
 - `.venv/`、`frontend/node_modules/`、`__pycache__/`、`.pytest_cache/` 均不属于源码。
 - `docs/qa-screenshots/` 是验收截图，可以作为课程项目证据保留。
 - Docker 入口包括 `Dockerfile.backend`、`frontend/Dockerfile`、`docker-compose.yml`、`docker-compose.server.yml`、`deploy/Caddyfile`。
-- `deliverables/` 保存课程答辩 PPT、汇报 PPT 和演讲稿；如内容大改，运行 `scripts/make_ppt_decks.py` 重新生成。
+- `deliverables/` 是课程交付物目录；当前最终报告为 `高级统计方法知识图谱智能问答系统_项目报告.docx`。旧 PPT 可按需用 `scripts/make_ppt_decks.py` 重新生成。
 
 ## 根目录规则
 
