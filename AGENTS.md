@@ -82,7 +82,7 @@
 - `.venv/`、`frontend/node_modules/`、`__pycache__/`、`.pytest_cache/` 均不属于源码。
 - `docs/qa-screenshots/` 是验收截图，可以作为课程项目证据保留。
 - Docker 入口包括 `Dockerfile.backend`、`frontend/Dockerfile`、`docker-compose.yml`、`docker-compose.server.yml`、`deploy/Caddyfile`。
-- `deliverables/` 是课程交付物目录；当前最终报告为 `高级统计方法知识图谱智能问答系统_项目报告.docx`。旧 PPT 可按需用 `scripts/make_ppt_decks.py` 重新生成。
+- `deliverables/` 仅保存本地课程交付物；最终报告为本地文件 `高级统计方法知识图谱项目报告_重制版.docx`，不提交到公开代码仓库。答辩 PPT 可按需用 `scripts/make_ppt_decks.py` 重新生成。
 
 ## 根目录规则
 

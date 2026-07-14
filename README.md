@@ -46,7 +46,7 @@
 │   ├── 完成度评估.md
 │   ├── 验收记录.md
 │   └── 实验报告.md
-├── deliverables/             # 课程交付物，含最终项目报告
+├── deliverables/             # 本地课程交付物（不作为代码仓库内容）
 ├── scripts/                  # Windows PowerShell 启动与验证脚本
 ├── deploy/Caddyfile          # Docker Compose 自带 Caddy 入口
 ├── docs/project/             # 题目、目标、约束、上下文等过程性材料
@@ -236,7 +236,7 @@ https://aistudyassistant.bluesclawd.dev
 - `docs/完成度评估.md`：当前完成度评分和剩余优化。
 - `docs/验收记录.md`：验证命令、截图和运行结果。
 - `docs/实验报告.md`：课程报告正文。
-- `deliverables/`：课程交付物目录；当前包含最终项目报告 `高级统计方法知识图谱智能问答系统_项目报告.docx`。旧 PPT 已由用户清空，如后续需要可用 `scripts/make_ppt_decks.py` 重新生成。
+- 课程最终报告已线下提交，正式文件保留在本地 `deliverables/高级统计方法知识图谱项目报告_重制版.docx`，不纳入本公开代码仓库。仓库只保留代码验收所需的源码、测试、部署文件、教材、文档和验收截图；如后续需要答辩 PPT，可用 `scripts/make_ppt_decks.py` 重新生成。
 
 ## 安全说明
 

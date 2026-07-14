@@ -14,7 +14,7 @@
 - 当前检索架构：`APP_RETRIEVAL_MODE` 支持 `auto`、`vector`、`hybrid`、`tfidf`；本地向量索引保存在 `data/vector_index/`，TF-IDF fallback 必须保留。
 - 当前参考书管理：上传文件保存在 `data/reference_books/`，属于运行数据，不提交 Git。
 - 当前 `deliverables/` 中旧 PPT 和演讲稿已由用户清空；看到旧 PPT 删除不要恢复，除非用户明确要求。
-- 最终报告模板为 `docs/小学期-作业-模板-2026.doc`；最终报告为 `deliverables/高级统计方法知识图谱智能问答系统_项目报告.docx`。
+- 最终报告模板为 `docs/小学期-作业-模板-2026.doc`；本地最终报告为 `deliverables/高级统计方法知识图谱项目报告_重制版.docx`，已线下提交，不纳入公开代码仓库。
 
 ## 不可破坏的不变量
 
@@ -84,7 +84,7 @@ curl -fsS https://aistudyassistant.bluesclawd.dev/api/system/stats
 - 改 API 时同步 `README.md`、`docs/架构与功能说明.md`、`docs/验收记录.md`。
 - 改环境变量、Docker、VPS 数据目录、上传教材保存方式时，同步 `.env.example`、`docs/运维手册.md`、`docs/部署方案.md`。
 - 改管理后台、权限边界或用户操作流程时，同步 README、`docs/架构与功能说明.md`、`docs/对抗性审查.md`、`docs/验收记录.md`。
-- 改报告或课程交付物状态时，同步 README、`docs/README.md`、`docs/验收记录.md` 和必要的接手说明。
+- 改报告或课程交付物状态时，同步 README、`docs/README.md`、`docs/验收记录.md` 和必要的接手说明；公开仓库不保留线下已提交的最终报告。
 - 不要把历史叙事追加到 `AGENTS.md`；`AGENTS.md` 只写后续实现必须遵守的稳定规则。
 
 ## 当前不做
