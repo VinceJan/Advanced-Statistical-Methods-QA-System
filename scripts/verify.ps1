@@ -1,6 +1,10 @@
 $ErrorActionPreference = "Stop"
 $env:PYTHONPATH = (Get-Location).Path
 $env:APP_DISABLE_LLM = "true"
+# 验证使用一次性测试凭据，避免依赖或暴露本地/生产管理员密码。
+$env:ADMIN_PASSWORD = "pytest-only-admin-password"
+# 使用独立验证数据库，避免覆盖本地演示数据或复用旧管理员密码哈希。
+$env:APP_DATABASE_URL = "sqlite:///data/verify.db"
 Get-NetTCPConnection -LocalPort 8000,5173 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
   Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
 }
@@ -32,8 +36,18 @@ try {
   $frontend = Start-Process -FilePath "powershell" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File",".\scripts\run_frontend.ps1" -WindowStyle Hidden -PassThru
   Start-Sleep -Seconds 4
   Push-Location frontend
-  npx playwright install chromium
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  $systemChrome = @(
+    "C:\Program Files\Google\Chrome\Application\chrome.exe",
+    "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    "C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+  ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if ($systemChrome) {
+    $env:PLAYWRIGHT_EXECUTABLE_PATH = $systemChrome
+  } else {
+    npx playwright install chromium
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  }
   node .\e2e\visual-smoke.mjs
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   Pop-Location

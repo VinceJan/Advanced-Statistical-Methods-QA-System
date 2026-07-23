@@ -16,7 +16,7 @@ async function ensureUser(username, password) {
   }
 }
 
-async function login(page, username = "admin", password = "Admin@123456") {
+async function login(page, username = "admin", password = process.env.ADMIN_PASSWORD ?? "pytest-only-admin-password") {
   await page.goto("http://127.0.0.1:5173/", { waitUntil: "networkidle" });
   await page.getByLabel("用户名").fill(username);
   await page.getByLabel("密码").fill(password);
@@ -34,7 +34,11 @@ async function ask(page, question) {
 
 async function main() {
   await fs.mkdir(outDir, { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(
+    process.env.PLAYWRIGHT_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH }
+      : {}
+  );
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const visualUser = `visual_student_${Date.now()}`;
   await ensureUser(visualUser, "password123");

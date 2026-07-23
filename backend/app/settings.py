@@ -22,7 +22,7 @@ class Settings:
     llm_model: str = os.getenv("MINIMAX_MODEL", "MiniMax-M3")
     llm_api_key: str = os.getenv("MINIMAX_API_KEY", "")
     admin_username: str = os.getenv("ADMIN_USERNAME", "admin")
-    admin_password: str = os.getenv("ADMIN_PASSWORD", "Admin@123456")
+    admin_password: str = os.getenv("ADMIN_PASSWORD", "")
     retrieval_mode: str = os.getenv("APP_RETRIEVAL_MODE", "auto").lower()
     reference_books_dir: Path = Path(os.getenv("APP_REFERENCE_BOOKS_DIR", str(DATA_DIR / "reference_books")))
     vector_index_dir: Path = Path(os.getenv("APP_VECTOR_INDEX_DIR", str(DATA_DIR / "vector_index")))

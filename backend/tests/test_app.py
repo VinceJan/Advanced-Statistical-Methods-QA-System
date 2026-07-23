@@ -1,12 +1,25 @@
 from __future__ import annotations
 
+import os
+import tempfile
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+
+os.environ.setdefault("ADMIN_PASSWORD", "pytest-only-admin-password")
+os.environ.setdefault(
+    "APP_DATABASE_URL",
+    f"sqlite:///{(Path(tempfile.mkdtemp(prefix='advanced-stat-test-')) / 'app.db').as_posix()}",
+)
+
 from backend.app.llm import LLMClient
 from backend.app.main import app
 from backend.app.schemas import SourceOut
+
+
+TEST_ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
 def test_vector_index_builds_and_searches_text_chunks(tmp_path) -> None:
@@ -69,7 +82,7 @@ def test_health_and_stats() -> None:
 
 def test_next_stage_stats_pagination_and_reference_books() -> None:
     with TestClient(app) as client:
-        admin = client.post("/api/auth/login", json={"username": "admin", "password": "Admin@123456"})
+        admin = client.post("/api/auth/login", json={"username": "admin", "password": TEST_ADMIN_PASSWORD})
         assert admin.status_code == 200
         admin_headers = {"Authorization": f"Bearer {admin.json()['token']}"}
 
@@ -120,7 +133,7 @@ def test_next_stage_stats_pagination_and_reference_books() -> None:
 
 def test_admin_can_upload_reference_book_metadata() -> None:
     with TestClient(app) as client:
-        admin = client.post("/api/auth/login", json={"username": "admin", "password": "Admin@123456"})
+        admin = client.post("/api/auth/login", json={"username": "admin", "password": TEST_ADMIN_PASSWORD})
         assert admin.status_code == 200
         admin_headers = {"Authorization": f"Bearer {admin.json()['token']}"}
 
@@ -195,7 +208,7 @@ def test_auth_qa_crud_and_ask() -> None:
         )
         assert forbidden_create.status_code == 403
 
-        admin = client.post("/api/auth/login", json={"username": "admin", "password": "Admin@123456"})
+        admin = client.post("/api/auth/login", json={"username": "admin", "password": TEST_ADMIN_PASSWORD})
         assert admin.status_code == 200
         admin_headers = {"Authorization": f"Bearer {admin.json()['token']}"}
 
@@ -322,7 +335,7 @@ def test_admin_permissions_and_admin_apis() -> None:
         forbidden = client.get("/api/admin/users", headers=student_headers)
         assert forbidden.status_code == 403
 
-        admin = client.post("/api/auth/login", json={"username": "admin", "password": "Admin@123456"})
+        admin = client.post("/api/auth/login", json={"username": "admin", "password": TEST_ADMIN_PASSWORD})
         assert admin.status_code == 200
         assert admin.json()["role"] == "admin"
         admin_headers = {"Authorization": f"Bearer {admin.json()['token']}"}

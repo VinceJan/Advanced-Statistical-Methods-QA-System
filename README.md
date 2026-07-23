@@ -90,7 +90,7 @@ Copy-Item .env.example .env
 | `APP_VECTOR_INDEX_DIR` | 本地向量索引目录，默认 `data/vector_index`。 |
 | `APP_MAX_REFERENCE_BOOK_MB` | 单个上传 PDF 大小上限，默认 `80`。 |
 | `ADMIN_USERNAME` | 种子管理员用户名，默认 `admin`。 |
-| `ADMIN_PASSWORD` | 种子管理员密码，默认 `Admin@123456`。 |
+| `ADMIN_PASSWORD` | 种子管理员密码，必须在本地或服务器环境中设置强密码。 |
 | `SITE_DOMAIN` | Docker Compose 自带 Caddy 时使用的域名。 |
 | `COMPOSE_PROJECT_NAME` | Docker 项目名，建议 `advanced-stat-qa`。 |
 
@@ -122,7 +122,7 @@ Copy-Item .env.example .env
 http://127.0.0.1:5173
 ```
 
-默认管理员账号来自 `.env`：`admin` / `Admin@123456`。普通用户可在登录页注册。
+管理员账号和密码来自本地 `.env` 或服务器环境变量；仓库不提供默认管理员密码。普通用户可在登录页注册。
 
 首次启动会创建 `data/app.db`，并从英文 PDF 构建教材文本块。当前验收规模：
 

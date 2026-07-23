@@ -27,6 +27,8 @@ def bootstrap(db: Session) -> None:
 
 
 def seed_admin(db: Session) -> None:
+    if not settings.admin_password:
+        raise RuntimeError("ADMIN_PASSWORD must be set before starting the application")
     admin = db.query(User).filter(User.username == settings.admin_username).first()
     if admin:
         if admin.role != "admin":
