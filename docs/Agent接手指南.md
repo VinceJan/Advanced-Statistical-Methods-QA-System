@@ -18,8 +18,8 @@
 
 - 代码仓库：`https://github.com/VinceJan/Advanced-Statistical-Methods-QA-System.git`
 - 公网地址：`https://aistudyassistant.bluesclawd.dev`
-- VPS 部署目录：`/opt/advanced-stat-qa/app`
-- 本地工作目录：`C:\Users\Jiang\Desktop\小学期工程实践`
+- VPS 部署目录：见私有运维记录，公开仓库不保存真实路径。
+- 本地工作目录：以当前仓库根目录为准。
 - 主要语料：`ISLRv2_corrected_June_2023.pdf`
 - 中文扫描教材已移除，不作为 RAG 输入。
 
@@ -110,7 +110,7 @@ http://127.0.0.1:5173
 ### 重新生成 PPT（可选）
 
 ```powershell
-& "C:\Users\Jiang\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" scripts\make_ppt_decks.py
+python scripts/make_ppt_decks.py
 ```
 
 输出目录：
@@ -122,8 +122,8 @@ deliverables/
 ### 线上运维
 
 ```bash
-ssh blues-vps
-cd /opt/advanced-stat-qa/app
+ssh stat-qa-vps
+cd /srv/advanced-stat-qa/app
 docker compose -p advanced-stat-qa -f docker-compose.server.yml ps
 ```
 
@@ -146,7 +146,7 @@ docker compose -p advanced-stat-qa config --quiet
 如果需要重新生成 PPT 或改了 PPT 生成脚本，再检查：
 
 ```powershell
-& "C:\Users\Jiang\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -c "from pptx import Presentation; from pathlib import Path; [print(p.name, len(Presentation(p).slides)) for p in Path('deliverables').glob('*.pptx')]"
+python -c "from pptx import Presentation; from pathlib import Path; [print(p.name, len(Presentation(p).slides)) for p in Path('deliverables').glob('*.pptx')]"
 ```
 
 如果改了线上服务，发布后检查：
@@ -205,14 +205,14 @@ git add .
 git commit -m "说明本次修改"
 git push
 tar -czf "$env:TEMP\advanced-stat-qa.tar.gz" --exclude=.git --exclude=.env --exclude=.venv --exclude=data --exclude=frontend/node_modules --exclude=frontend/dist --exclude=__pycache__ --exclude=.pytest_cache .
-scp "$env:TEMP\advanced-stat-qa.tar.gz" blues-vps:/tmp/advanced-stat-qa.tar.gz
+scp "$env:TEMP\advanced-stat-qa.tar.gz" stat-qa-vps:/tmp/advanced-stat-qa.tar.gz
 ```
 
 服务器：
 
 ```bash
-ssh blues-vps
-cd /opt/advanced-stat-qa
+ssh stat-qa-vps
+cd /srv/advanced-stat-qa
 docker compose -p advanced-stat-qa -f app/docker-compose.server.yml down
 rm -rf app.new
 mkdir app.new

@@ -7,7 +7,7 @@
 - 项目类型：题目二课程项目，“高级统计方法课程知识图谱智能问答系统”。
 - 默认语言：中文界面、中文回答；教材证据可以来自英文 PDF。
 - 当前主语料：`ISLRv2_corrected_June_2023.pdf`，中文扫描教材已不作为 RAG 输入。
-- 当前部署：公网 `https://aistudyassistant.bluesclawd.dev`，VPS 目录 `/opt/advanced-stat-qa/app`，Compose 文件 `docker-compose.server.yml`，宿主机 Caddy 反代。
+- 当前部署：公网 `https://aistudyassistant.bluesclawd.dev`，VPS 目录由私有运维配置保存，Compose 文件为 `docker-compose.server.yml`，由宿主机 Caddy 反代。
 - 自动部署：push 到 `main` 分支触发 `.github/workflows/deploy.yml`，上传源码包到 VPS，恢复服务器 `.env`，重建 Docker 容器并健康检查。
 - 当前数据规模：69 个知识点、336 条图谱边、70 个以上问答对、1413 个教材文本块。
 - 当前主要技术：FastAPI、SQLite、SQLAlchemy、React、TypeScript、Vite、Cytoscape.js、MiniMax OpenAI-compatible Chat Completions。

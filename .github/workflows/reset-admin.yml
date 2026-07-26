@@ -12,12 +12,12 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          echo "165.232.60.232 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH9JfNRKqO1sAflK6YkHSvL09QvIcuar5pqFEGX4EEQ7" >> ~/.ssh/known_hosts
+          echo "${{ secrets.VPS_HOST }} ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH9JfNRKqO1sAflK6YkHSvL09QvIcuar5pqFEGX4EEQ7" >> ~/.ssh/known_hosts
 
       - name: Reset admin password on VPS
         run: |
           echo "=== 开始重置线上 admin 密码 ==="
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p 10628 root@165.232.60.232 << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes -p "${{ secrets.VPS_SSH_PORT }}" "${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_HOST }}" << 'EOF'
             set -e
             cd /opt/advanced-stat-qa/app
 
